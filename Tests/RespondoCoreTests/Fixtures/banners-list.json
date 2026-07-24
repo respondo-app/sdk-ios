@@ -1,0 +1,22 @@
+{
+  "banners": [
+    {
+      "campaign_id": "5e1f3a7b-9c4d-4e8f-a0b2-3c5d7e9f1a4b",
+      "delivery_id": "6f2a4b8c-0d5e-4f9a-b1c3-4d6e8f0a2b5c",
+      "name": "Промо тарифа Pro",
+      "content": {
+        "body": "Обновитесь до Pro и получите безлимитные AI-ответы.",
+        "banner_layout": "floating",
+        "banner_position": "bottom",
+        "banner_action": "url",
+        "banner_url": "https://respondo.ai/pricing",
+        "banner_link_label": "Смотреть тарифы",
+        "banner_open_new_tab": true,
+        "banner_bg": "#F5F3FF",
+        "banner_fg": "#4C1D95",
+        "banner_dismiss_after_action": true,
+        "show_dismiss": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "id": "f1b2c3d4-5e6a-4b7c-8d9e-0a1b2c3d4e5f",
+      "title": "Native push-уведомления в мобильных SDK",
+      "body": "Теперь приложения на iOS, Android и Flutter получают ответы операторов и push-кампании прямо в системные уведомления.",
+      "image_url": "https://cdn.respondo.ai/news/push-launch.png",
+      "labels": [
+        "Новое",
+        "Mobile"
+      ],
+      "published_at": "2026-07-20T10:00:00Z",
+      "seen": false
+    },
+    {
+      "id": "0b9a8c7d-6e5f-4a3b-2c1d-0e9f8a7b6c5d",
+      "title": "Каналы Slack и Discord",
+      "body": "Подключайте Slack и Discord как полноценные каналы поддержки.",
+      "image_url": "",
+      "labels": [
+        "Каналы"
+      ],
+      "published_at": "2026-07-10T08:30:00Z",
+      "seen": true
+    }
+  ],
+  "unread": 1
+}

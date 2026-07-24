@@ -1,0 +1,45 @@
+{
+  "surveys": [
+    {
+      "campaign_id": "3c9d1e5f-7a2b-4c6d-8e0f-1a3b5c7d9e2f",
+      "delivery_id": "4d0e2f6a-8b3c-4d7e-9f1a-2b4c6d8e0f3a",
+      "name": "CSAT после решения обращения",
+      "content": {
+        "survey_format": "in_modal",
+        "intro": "Помогите нам стать лучше — пара коротких вопросов.",
+        "thanks": "Спасибо за ваш отзыв!",
+        "show_progress": true,
+        "show_dismiss": true,
+        "questions": [
+          {
+            "id": "q_csat",
+            "type": "csat",
+            "title": "Насколько вы довольны поддержкой?",
+            "required": true
+          },
+          {
+            "id": "q_reason",
+            "type": "choice",
+            "title": "Что сработало лучше всего?",
+            "options": [
+              "Быстрый ответ",
+              "Полезность",
+              "Вежливость"
+            ],
+            "required": false
+          },
+          {
+            "id": "q_comment",
+            "type": "text",
+            "title": "Что можно улучшить?",
+            "required": false
+          }
+        ]
+      },
+      "from_sender": {
+        "name": "Анна",
+        "avatar_url": "https://cdn.respondo.ai/users/anna/avatar.png"
+      }
+    }
+  ]
+}

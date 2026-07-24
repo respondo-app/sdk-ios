@@ -1,0 +1,36 @@
+{
+  "checklists": [
+    {
+      "id": "7a3b5c9d-1e6f-4a0b-c2d4-5e7f9a1b3c6d",
+      "title": "Быстрый старт с Respondo",
+      "body": "Три шага, чтобы запустить поддержку.",
+      "dismissible": true,
+      "tasks": [
+        {
+          "id": "task-connect-inbox",
+          "title": "Подключить первый канал",
+          "body": "Добавьте виджет или мессенджер.",
+          "action": {
+            "type": "url",
+            "url": "https://app.respondo.ai/channels",
+            "new_tab": false
+          }
+        },
+        {
+          "id": "task-invite-team",
+          "title": "Пригласить команду",
+          "body": "Добавьте операторов в рабочее пространство.",
+          "action": {
+            "type": "manual"
+          }
+        }
+      ],
+      "progress": {
+        "status": "started",
+        "done_task_ids": [
+          "task-connect-inbox"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "messages": [
+    {
+      "id": "b0a1c2d3-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "conversation_id": "a1c4e7b2-5d38-4f6a-9e10-3b7c2d5f8a90",
+      "role": "user",
+      "content": "Здравствуйте, у меня вопрос по тарифам.",
+      "created_at": "2026-07-22T09:12:00Z"
+    },
+    {
+      "id": "c1b2a3d4-5e6f-4a7b-9c8d-0e1f2a3b4c5d",
+      "conversation_id": "a1c4e7b2-5d38-4f6a-9e10-3b7c2d5f8a90",
+      "role": "assistant",
+      "content": "Здравствуйте! Расскажите, какой объём обращений в месяц вы ожидаете — подберу подходящий тариф.",
+      "author_name": "Respondo Support",
+      "created_at": "2026-07-22T09:12:04Z"
+    }
+  ],
+  "has_more": true,
+  "oldest_message_id": "b0a1c2d3-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+}

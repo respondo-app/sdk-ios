@@ -1,0 +1,35 @@
+{
+  "agent_id": "7d3f9c2a-1e4b-4a6d-9f21-8c5b0e7a4d10",
+  "name": "Respondo Support",
+  "title": "Respondo Support",
+  "primary_color": "#2563eb",
+  "logo_url": "https://cdn.respondo.ai/brands/respondo/logo.png",
+  "avatar_url": "https://cdn.respondo.ai/agents/respondo/avatar.png",
+  "position": "bottom-right",
+  "greeting": "Здравствуйте! Чем можем помочь?",
+  "greeting_enabled": true,
+  "quick_questions": [
+    "Как подключить канал?",
+    "Тарифы и оплата",
+    "Настроить AI-агента"
+  ],
+  "tone": "professional",
+  "identity_verification_enabled": true,
+  "chat_size": "default",
+  "launcher_size": "default",
+  "offset_bottom": 20,
+  "offset_side": 20,
+  "border_radius": 12,
+  "z_index": 999999,
+  "custom_css": "",
+  "suggested_questions_enabled": true,
+  "proactive_messages_enabled": true,
+  "proactive_delay_seconds": 5,
+  "office_hours": {
+    "open": true,
+    "reply_time": "Обычно отвечаем в течение нескольких минут",
+    "timezone": "Europe/Moscow",
+    "next_close_at": "2026-07-23T19:00:00+03:00"
+  },
+  "visitor_language": "ru"
+}

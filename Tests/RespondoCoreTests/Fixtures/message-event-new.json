@@ -1,0 +1,16 @@
+{
+  "type": "new_message",
+  "conversation_id": "a1c4e7b2-5d38-4f6a-9e10-3b7c2d5f8a90",
+  "agent_id": "7d3f9c2a-1e4b-4a6d-9f21-8c5b0e7a4d10",
+  "data": {
+    "id": "e9a3c1f6-4b8d-4e0a-b5f3-1d7b2a4e9c63",
+    "conversation_id": "a1c4e7b2-5d38-4f6a-9e10-3b7c2d5f8a90",
+    "role": "assistant",
+    "content": "Здравствуйте, это Анна из поддержки. Уже смотрю вашу проблему.",
+    "author_name": "Анна",
+    "author_avatar_url": "https://cdn.respondo.ai/users/anna/avatar.png",
+    "created_at": "2026-07-23T13:03:00Z",
+    "channel": "widget"
+  },
+  "timestamp": 1721732580
+}

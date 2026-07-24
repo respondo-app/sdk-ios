@@ -1,0 +1,27 @@
+{
+  "status": "open",
+  "messages": [
+    {
+      "id": "c7e1a9d4-2f6b-4c8e-a3d1-9b5f0e2c7a41",
+      "conversation_id": "a1c4e7b2-5d38-4f6a-9e10-3b7c2d5f8a90",
+      "role": "user",
+      "content": "Как подключить новый канал?",
+      "created_at": "2026-07-23T13:00:00Z"
+    },
+    {
+      "id": "d8f2b0e5-3a7c-4d9f-b4e2-0c6a1f3d8b52",
+      "conversation_id": "a1c4e7b2-5d38-4f6a-9e10-3b7c2d5f8a90",
+      "role": "assistant",
+      "content": "Здравствуйте! Подключить новый канал можно в разделе «Каналы» — нажмите «Добавить канал» и выберите нужный тип. Помочь с конкретным каналом?",
+      "confidence": 0.94,
+      "author_name": "Respondo Support",
+      "author_avatar_url": "https://cdn.respondo.ai/agents/respondo/avatar.png",
+      "created_at": "2026-07-23T13:00:05Z"
+    }
+  ],
+  "has_more": false,
+  "history_conversation_id": "a1c4e7b2-5d38-4f6a-9e10-3b7c2d5f8a90",
+  "oldest_message_id": "c7e1a9d4-2f6b-4c8e-a3d1-9b5f0e2c7a41",
+  "conversation_id": "a1c4e7b2-5d38-4f6a-9e10-3b7c2d5f8a90",
+  "session_token": "YTFjNGU3YjItNWQzOC00ZjZhLTllMTAtM2I3YzJkNWY4YTkwfDE3MjE3MzAwMDB8MA.0f2ac4f7f5fbe9092077253c6838903aaa3eaf2650a79a67737b95578a5f9d7b"
+}
