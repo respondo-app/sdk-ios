@@ -21,6 +21,8 @@ public final class RespondoEngine: ConversationHost, EngagementHost {
     private let newsUnreadBroadcaster = ValueBroadcaster<Int>(0)
     private let proactiveBroadcaster = ValueBroadcaster<RespondoProactiveMessage?>(nil)
     public weak var delegate: RespondoDelegate?
+    /// Открытие диплинка push-кампании (инъектируется в тестах). true — ссылку приняли.
+    var openDeepLink: @MainActor (String) async -> Bool = { await DeepLinkOpener.open($0) }
 
     // Состояние.
     private var config: RespondoConfig?
@@ -426,6 +428,14 @@ public final class RespondoEngine: ConversationHost, EngagementHost {
         pushManager?.reportOpened(payload)
         if let conversationId = payload.conversationId, !conversationId.isEmpty {
             open()
+        } else if let link = payload.deepLink, !link.isEmpty {
+            // Push-кампания с экраном для открытия: ссылку открывает сам SDK (как Intercom).
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if await !self.openDeepLink(link) {
+                    self.delegate?.respondoUnhandledDeepLink(payload)
+                }
+            }
         } else {
             delegate?.respondoUnhandledDeepLink(payload)
         }
@@ -482,6 +492,18 @@ public final class RespondoEngine: ConversationHost, EngagementHost {
             let ownershipSnapshot = ownership()
             Task { await realtime.setConversation(id: id, ownership: ownershipSnapshot) }
         }
+    }
+
+    func conversationDidClose(sessionToken: String?) {
+        guard let config else { return }
+        // Свежий ключ сохраняем; ИМЕЮЩИЙСЯ НЕ СТИРАЕМ — он ключ от строки, от
+        // которой форкнется follow-up.
+        if let sessionToken, !sessionToken.isEmpty {
+            identityStore.setSessionToken(sessionToken, agentId: config.agentId, channelId: config.channelId)
+        }
+        guard let realtime else { return }
+        let ownershipSnapshot = ownership()
+        Task { await realtime.setConversation(id: nil, ownership: ownershipSnapshot) }
     }
 
     func escalationDidChange(_ escalated: Bool) {

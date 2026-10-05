@@ -42,11 +42,13 @@ final class PushManager {
             appId: bundleId,
             locale: identityStore.storedLang() ?? Locale.current.identifier,
             sdkVersion: SdkVersion.current,
+            sdkName: SdkVersion.source,
             visitorId: identityStore.visitorId(),
             email: identity.email,
             userId: identity.userId,
             userHash: identity.userHash,
-            sessionToken: identityStore.sessionToken(agentId: agentId, channelId: channelId)
+            sessionToken: identityStore.sessionToken(agentId: agentId, channelId: channelId),
+            environment: ApnsEnvironment.current
         )
         Task {
             do {

@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import RespondoCore
 
@@ -25,8 +26,41 @@ final class FixtureDecodingTests: XCTestCase {
     func testChatResponseHandoverDecodes() {
         let response = Fixture.decode(ChatResponseDTO.self, "chat-response-handover")
         XCTAssertEqual(response.humanHandover, true)
-        XCTAssertEqual(response.ticketId, 48213)
-        XCTAssertNotNil(response.ticketURL)
+        XCTAssertNotNil(response.message)
+    }
+
+    /// Прод-инцидент: после эскалации виджет показывал клиенту кнопку
+    /// «View ticket #42466» со ссылкой на
+    /// https://<tenant>.zendesk.com/agent/tickets/42466 — staff-интерфейс
+    /// хелпдеска арендатора.
+    ///
+    /// Раньше фикстура handover сама содержала ticket_url/ticket_id, а этот сьют
+    /// утверждал их наличие — то есть тесты защищали утечку. Утверждение
+    /// перевёрнуто: ни в одном клиентском payload не должно быть ключа со
+    /// словом "ticket". Скан рекурсивный, поэтому вложенное поле тоже не
+    /// проскочит. Аналог backend/internal/api/handlers/escalation_no_ticket_leak_test.go.
+    func testCustomerFacingFixturesCarryNoTicketKeys() {
+        for name in ["chat-response-handover", "chat-response-first", "resume", "history-page"] {
+            guard let json = try? JSONSerialization.jsonObject(with: Fixture.data(name)) else {
+                XCTFail("фикстура \(name) не разобралась как JSON")
+                continue
+            }
+            for key in Self.jsonKeys(json) where key.lowercased().contains("ticket") {
+                XCTFail("фикстура \(name) содержит ключ \"\(key)\": номер и URL тикета — "
+                    + "внутренние данные хелпдеска арендатора, клиенту они не уходят")
+            }
+        }
+    }
+
+    /// Рекурсивно собирает имена всех ключей JSON-объектов, включая вложенные в массивы.
+    private static func jsonKeys(_ value: Any) -> [String] {
+        if let dict = value as? [String: Any] {
+            return dict.flatMap { [$0.key] + jsonKeys($0.value) }
+        }
+        if let array = value as? [Any] {
+            return array.flatMap { jsonKeys($0) }
+        }
+        return []
     }
 
     func testResumeDecodes() {

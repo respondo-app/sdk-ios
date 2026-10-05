@@ -119,8 +119,10 @@ struct ChatResponseDTO: Codable, Equatable {
     let humanHandover: Bool?
     let suggestedQuestions: [String]?
     let docLinks: [DocLinkDTO]?
-    let ticketURL: String?
-    let ticketId: Int64?
+
+    // Внимание: сюда НЕ добавляются ticket_url / ticket_id и любые другие
+    // ссылки на внутренние системы. Это customer-facing DTO; зеркалит
+    // backend/internal/api/handlers/chat_dto.go, где их тоже нет.
 
     enum CodingKeys: String, CodingKey {
         case message
@@ -129,8 +131,6 @@ struct ChatResponseDTO: Codable, Equatable {
         case humanHandover = "human_handover"
         case suggestedQuestions = "suggested_questions"
         case docLinks = "doc_links"
-        case ticketURL = "ticket_url"
-        case ticketId = "ticket_id"
     }
 }
 
@@ -174,18 +174,34 @@ struct WidgetMessagesResponseDTO: Codable, Equatable {
 }
 
 /// Ответ `POST /api/v1/chat/conversations/{id}/escalate`.
+///
+/// ГРАНИЦА СЕССИИ. Нажатие «нужен человек» на ЗАКРЫТОЙ беседе её не воскрешает:
+/// бэкенд заводит follow-up, эскалирует ЕГО и возвращает здесь id, токен и
+/// ссылку назад ИМЕННО новой строки.
+///
+/// Токен и ссылка назад тут не декодировались вовсе, а вызывающий выбрасывал и
+/// сам ответ. Итог: оператор получал в «Needs human» кейс, в который клиент
+/// физически не мог написать (SDK продолжал опрашивать закрытую строку), а
+/// следующее сообщение форкало ТРЕТЬЮ беседу и перебивало закрытой ссылку
+/// вперёд — второй кейс выпадал из цепочки и становился недостижим для ленты,
+/// истории и аналитики.
 struct EscalationResponseDTO: Codable, Equatable {
     let conversationId: String?
     let status: String?
-    let ticketURL: String?
-    let ticketId: Int64?
     let message: String?
+    /// Ключ от НОВОЙ строки. Без него собственная лента клиента ответит на
+    /// follow-up 403: он рождается с `access=token`.
+    let sessionToken: String?
+    /// Тред для пользователя тот же — ленту не сбрасываем.
+    let previousConversationId: String?
+
+    // Внимание: без ticket_url / ticket_id — см. комментарий у ChatResponseDTO.
 
     enum CodingKeys: String, CodingKey {
         case status, message
         case conversationId = "conversation_id"
-        case ticketURL = "ticket_url"
-        case ticketId = "ticket_id"
+        case sessionToken = "session_token"
+        case previousConversationId = "previous_conversation_id"
     }
 }
 
@@ -274,18 +290,23 @@ struct PushRegisterRequestDTO: Codable, Equatable {
     var appId: String?
     var locale: String?
     var sdkVersion: String?
+    var sdkName: String?
     var visitorId: String?
     var email: String?
     var userId: String?
     var userHash: String?
     var sessionToken: String?
+    /// `production` | `sandbox` — окружение APNs, в котором действителен токен
+    /// (см. `ApnsEnvironment`). Пусто/nil означает «выяснить при доставке».
+    var environment: String?
 
     enum CodingKeys: String, CodingKey {
-        case platform, token, email
+        case platform, token, email, environment
         case agentId = "agent_id"
         case channelId = "channel_id"
         case appId = "app_id"
         case sdkVersion = "sdk_version"
+        case sdkName = "sdk_name"
         case visitorId = "visitor_id"
         case userId = "user_id"
         case userHash = "user_hash"

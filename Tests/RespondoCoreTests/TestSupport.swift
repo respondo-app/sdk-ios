@@ -79,9 +79,23 @@ final class FakeConversationHost: ConversationHost {
     func ownership() -> OwnershipParams { OwnershipParams(sessionToken: sessionToken, userHash: identity.userHash, visitorId: visitorId) }
     func currentIdentity() -> RespondoIdentity { identity }
     func autoMetadata() -> [String: String] { ["platform": "ios"] }
+    /// Сколько раз движку сказали «беседа закрыта, реалтайм отпусти».
+    var closeCount = 0
     func conversationDidChange(id: String?, sessionToken: String?) {
         lastConversationId = id
-        if let sessionToken { lastSessionToken = sessionToken }
+        if let sessionToken {
+            lastSessionToken = sessionToken
+            // Тот же контракт, что у движка: свежий токен пишется в хранилище.
+            self.sessionToken = sessionToken
+        }
+    }
+    func conversationDidClose(sessionToken: String?) {
+        closeCount += 1
+        // Тот же контракт, что у движка: свежий ключ сохраняется, имеющийся не стирается.
+        if let sessionToken, !sessionToken.isEmpty {
+            lastSessionToken = sessionToken
+            self.sessionToken = sessionToken
+        }
     }
     func escalationDidChange(_ escalated: Bool) { self.escalated = escalated }
     func bumpUnread(by count: Int) { unread += count }

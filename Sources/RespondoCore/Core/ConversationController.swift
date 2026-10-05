@@ -49,6 +49,21 @@ public final class ConversationController: ObservableObject {
     // MARK: - Внутреннее состояние
 
     private(set) var conversationId: String?
+    /// Беседа, на которую мы смотрим, ЗАКРЫТА (resolved/archived).
+    ///
+    /// Это флаг, а НЕ забвение: id и токен остаются, потому что именно от этой
+    /// строки бэкенд форкает follow-up — и на следующем сообщении
+    /// (chat_ingest.go), и на нажатии «нужен человек» (chat_escalate_session.go).
+    /// Пока `resetConversationAfterResolve` обнулял id, следующее сообщение
+    /// уходило с пустым conversation_id, бэкенд шёл в ветку «беседы нет» и
+    /// создавал ОСИРОТЕВШИЙ корень: без цепочки в обе стороны, без
+    /// унаследованных «спама», языка и человеческой передачи. А лента клиента
+    /// собирается сервером по этой самой цепочке — то есть его собственный чат
+    /// после каждого закрытия начинался бы с середины, уже навсегда.
+    ///
+    /// Отвечает флаг ровно за одно: на закрытой строке нечего слушать, поэтому
+    /// реалтайм от неё отцепляется.
+    private(set) var conversationClosed = false
     private var historyConversationId: String?
     private var oldestMessageId: String?
     private var lastBackendMessageId: String?
@@ -142,13 +157,16 @@ public final class ConversationController: ObservableObject {
             messages = restored.sorted { $0.createdAt < $1.createdAt }
             lastBackendMessageId = messages.last?.id
         }
-        // Живой id/токен только для open/snoozed; иначе тред read-only.
+        // id приходит при ЛЮБОМ статусе, включая закрытый: сервер отдаёт его
+        // именно затем, чтобы следующему сообщению и нажатию «нужен человек»
+        // было от чего форкаться. Статус решает здесь только одно — есть ли ещё
+        // что слушать на этой строке.
         conversationId = resume.conversationId
         isEscalated = (resume.status == "escalated")
+        conversationClosed = Self.isClosedStatus(resume.status)
         // Свежий session_token из resume — источник правды: пробрасываем его в host,
         // чтобы он записался в хранилище ДО subscribe/history. Хранимый токен НЕ
-        // затирает свежий; для живой беседы без токена в resume сохраняем прежний,
-        // а для закрытой (conversationId == nil) отдаём nil — токен очистится.
+        // затирает свежий; без беседы вовсе отдаём nil — токен очистится.
         let freshToken: String?
         if let token = resume.sessionToken, !token.isEmpty {
             freshToken = token
@@ -157,7 +175,14 @@ public final class ConversationController: ObservableObject {
         } else {
             freshToken = nil
         }
-        host?.conversationDidChange(id: conversationId, sessionToken: freshToken)
+        if conversationClosed {
+            // Токен сохраняем (он ключ от строки, от которой форкнется
+            // follow-up), реалтайм не поднимаем — одним вызовом, чтобы подписка
+            // и отписка не разъехались по порядку.
+            host?.conversationDidClose(sessionToken: freshToken)
+        } else {
+            host?.conversationDidChange(id: conversationId, sessionToken: freshToken)
+        }
     }
 
     // MARK: - Отправка
@@ -254,11 +279,10 @@ public final class ConversationController: ObservableObject {
         if let index = messages.firstIndex(where: { $0.id == localId }) {
             messages[index].deliveryStatus = .sent
         }
-        // Скользящее обновление беседы/токена.
-        if let cid = response.conversationId, cid != conversationId {
-            conversationId = cid
-        }
-        host?.conversationDidChange(id: response.conversationId ?? conversationId, sessionToken: response.sessionToken)
+        // Скользящее обновление беседы/токена. Другой id означает, что закрытая
+        // строка форкнулась: с этого момента беседа клиента — новая, и остаться
+        // на старой значило бы форкать её снова каждым сообщением.
+        adoptSession(id: response.conversationId, sessionToken: response.sessionToken)
 
         let handover = response.humanHandover ?? false
         if handover {
@@ -349,18 +373,43 @@ public final class ConversationController: ObservableObject {
 
     // MARK: - Эскалация
 
+    /// «Нужен человек». Работает и на ЗАКРЫТОЙ беседе — в этом весь смысл того,
+    /// что id и токен переживают закрытие: `cid` ниже и есть строка, ОТ которой
+    /// бэкенд форкает follow-up.
     public func escalate() async {
         guard let cid = conversationId, !isEscalated else { return }
         do {
             let response = try await apiClient.escalate(conversationId: cid, ownership: ownershipParams())
-            var content = strings.string("escalatedMessage", lang: lang)
-            if let ticket = response.ticketURL { content += "\n\(ticket)" }
-            appendSystem(id: "handover-\(cid)", content: content)
+            // ХЭНДЛЫ НОВОЙ СТРОКИ ПОДХВАТЫВАЮТСЯ. Ответ выбрасывался целиком
+            // (`_ = try await ...`), и клиент оставался на закрытой беседе:
+            // оператор получал кейс без единого сообщения, его ответ до
+            // пользователя не доходил, а следующее сообщение форкало третью
+            // строку, выбивая вторую из цепочки.
+            adoptSession(id: response.conversationId, sessionToken: response.sessionToken)
+            // Клиенту показываем только факт передачи оператору. Никаких ссылок
+            // на внутренние системы (тикет-трекер и т.п.) — это наша кухня.
+            appendSystem(id: "handover-\(cid)", content: strings.string("escalatedMessage", lang: lang))
             setEscalated(true)
             suggestedQuestions = []
+            persist()
         } catch {
             appendSystem(id: "escalate-error-\(cid)", content: strings.string("networkError", lang: lang))
         }
+    }
+
+    /// Переехать в беседу, которую назвал сервер, и снова считать сессию живой.
+    ///
+    /// Пустые поля не затирают уже имеющиеся: ответ эскалации выписывает токен
+    /// только когда сессия действительно сменилась, и «нет токена» здесь
+    /// означает «остаёмся с прежним», а не «потеряли доступ».
+    private func adoptSession(id: String?, sessionToken: String?) {
+        if let id, !id.isEmpty, id != conversationId {
+            conversationId = id
+            historyConversationId = id
+        }
+        conversationClosed = false
+        let token = (sessionToken?.isEmpty == false) ? sessionToken : host?.ownership().sessionToken
+        host?.conversationDidChange(id: conversationId, sessionToken: token)
     }
 
     public func continueWithAI() async {
@@ -516,11 +565,13 @@ public final class ConversationController: ObservableObject {
         }
     }
 
+    /// Беседу закрыли. Реалтайм отпускаем, ХЭНДЛЫ ОСТАВЛЯЕМ — см. `conversationClosed`.
     private func resetConversationAfterResolve() {
-        conversationId = nil
+        conversationClosed = true
         isEscalated = false
         suggestedQuestions = []
-        host?.conversationDidChange(id: nil, sessionToken: nil)
+        // Токен не пересылаем — он уже в хранилище и остаётся там.
+        host?.conversationDidClose(sessionToken: nil)
         host?.escalationDidChange(false)
         persist()
     }
@@ -585,6 +636,13 @@ public final class ConversationController: ObservableObject {
     private func appendSystem(id: String, content: String) {
         guard !messages.contains(where: { $0.id == id }) else { return }
         messages.append(ChatMessage(id: id, role: .system, content: content, createdAt: Date(), isLocal: true))
+    }
+
+    /// Закрыта ли беседа с таким статусом. Статусов закрытия ДВА: `resolved` и
+    /// `archived` (осознанно убранная переписка) — тот же предикат, что у
+    /// бэкендовой развилки `isLiveConversation` (open|snoozed).
+    static func isClosedStatus(_ status: String?) -> Bool {
+        status == "resolved" || status == "archived"
     }
 
     private func ownershipParams() -> OwnershipParams {

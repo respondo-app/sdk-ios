@@ -51,6 +51,39 @@ final class EngineLifecycleTests: XCTestCase {
         XCTAssertEqual(engine.unreadCount, 0)
     }
 
+    /// Push-кампания без беседы, но с диплинком: SDK сам открывает ссылку (как Intercom),
+    /// делегат не дёргается; не открылась — respondoUnhandledDeepLink.
+    func testCampaignPushOpensDeepLink() async throws {
+        for accepted in [true, false] {
+            let (engine, _, _) = makeEngine()
+            let delegate = CountingDelegate()
+            engine.delegate = delegate
+            var opened: [String] = []
+            engine.openDeepLink = { link in opened.append(link); return accepted }
+            engine.initialize(config: RespondoConfig(agentId: "7d3f9c2a-1e4b-4a6d-9f21-8c5b0e7a4d10"), identity: nil)
+            try await waitUntil { engine.controller != nil }
+
+            let payload = RespondoPushPayload(kind: .message, conversationId: nil, messageId: "dl-\(accepted)", deepLink: "yourapp://orders/1", title: "t", body: "b", raw: [:])
+            _ = engine.handlePush(payload)
+            try await waitUntil { !opened.isEmpty }
+            try await Task.sleep(nanoseconds: 50_000_000)
+
+            XCTAssertEqual(opened, ["yourapp://orders/1"])
+            XCTAssertEqual(delegate.unhandledDeepLinks, accepted ? 0 : 1)
+        }
+    }
+
+    func testDeepLinkOpenerParsesAndMatchesUniversalLinkDomains() {
+        XCTAssertNil(DeepLinkOpener.url(from: "  "))
+        XCTAssertNil(DeepLinkOpener.url(from: "javascript:alert(1)"))
+        XCTAssertNotNil(DeepLinkOpener.url(from: "yourapp://orders/1"))
+        let url = DeepLinkOpener.url(from: "https://app.example.com/bots?id=1")!
+        XCTAssertTrue(DeepLinkOpener.isUniversalLink(url, domains: ["*.example.com"]))
+        XCTAssertTrue(DeepLinkOpener.isUniversalLink(url, domains: ["app.example.com"]))
+        XCTAssertFalse(DeepLinkOpener.isUniversalLink(url, domains: ["example.com"]))
+        XCTAssertFalse(DeepLinkOpener.isUniversalLink(DeepLinkOpener.url(from: "yourapp://app.example.com")!, domains: ["app.example.com"]))
+    }
+
     func testHandlePushReturnsTrueSynchronouslyBeforeInit() {
         let (engine, _, _) = makeEngine()
         let payload = RespondoPushPayload(kind: .message, conversationId: "c", messageId: "m", title: "t", body: "b", raw: [:])
