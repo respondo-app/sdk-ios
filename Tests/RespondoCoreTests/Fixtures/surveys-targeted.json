@@ -1,0 +1,23 @@
+{
+  "surveys": [
+    {
+      "campaign_id": "5e1f3a7b-9c2d-4e8f-a0b1-c2d3e4f5a6b7",
+      "delivery_id": "",
+      "name": "Checkout feedback",
+      "content": {
+        "survey_format": "in_modal",
+        "survey_url_rules": [{ "op": "contains", "value": "/checkout" }],
+        "survey_screen_rules": [
+          { "op": "starts_with", "value": "Checkout" },
+          { "op": "not_contains", "value": "Error" }
+        ],
+        "survey_delay_seconds": 0,
+        "survey_trigger_event": "order_placed",
+        "thanks": "Thanks!",
+        "questions": [
+          { "id": "q1", "type": "csat", "title": "How easy was checkout?", "required": true }
+        ]
+      }
+    }
+  ]
+}

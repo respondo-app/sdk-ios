@@ -168,7 +168,7 @@ public final class RespondoEngine: ConversationHost, EngagementHost {
 
         self.pushManager = PushManager(apiClient: api, identityStore: identityStore, agentId: config.agentId, channelId: config.channelId)
 
-        let engagement = EngagementController(apiClient: api, host: self)
+        let engagement = EngagementController(apiClient: api, host: self, prefs: prefs)
         engagement.onProactive = { [weak self] message in
             self?.proactiveBroadcaster.send(message)
             self?.delegate?.respondoProactiveMessage(message)
@@ -199,8 +199,8 @@ public final class RespondoEngine: ConversationHost, EngagementHost {
         eventPump = Task { @MainActor [weak self] in
             guard let realtimeEvents = self?.realtime?.events else { return }
             for await event in realtimeEvents {
-                if case .overlayShow(let items) = event {
-                    self?.engagement?.applyOverlayItems(items)
+                if case .overlayShow(let items, let contact) = event {
+                    self?.applyOverlayShow(items: items, contact: contact)
                 } else {
                     self?.controller?.handle(event)
                     self?.controller?.scheduleRead()
@@ -290,11 +290,35 @@ public final class RespondoEngine: ConversationHost, EngagementHost {
         }
     }
 
+    /// Кадр `overlay.show` → engagement-слой, только если он посчитан для
+    /// текущего контакта. Сокет переживает `identify()` (`setContext` шлёт
+    /// identify по тому же соединению), поэтому кадр прежнего контакта (его
+    /// identify или пуш запуска кампании) может прийти после `identify(B)` и
+    /// отдал бы B опросы и доставки A. Кадр без штампа `data.identity` тоже
+    /// отбрасывается: каталог по HTTP знает, для кого запрошен
+    /// (api-surface.md §3.3, как `survey-runtime.ts` на вебе).
+    func applyOverlayShow(items: [JSONValue], contact: RespondoIdentity.ContactKey?) {
+        guard let contact, contact == identity.contactKey else {
+            RespondoLog.debug("overlay.show for another contact dropped")
+            return
+        }
+        engagement?.applyOverlayItems(items)
+    }
+
     // MARK: - Публичные методы (буферизуются до init)
 
     public func identify(_ identity: RespondoIdentity) {
         guard initialized else { queue.enqueue(.identify(identity)); return }
+        // Личность заменяется целиком (api-surface.md §3.3): поле, не переданное
+        // в identify(), сбрасывается — так же на вебе, в Android и Flutter.
+        let prevKey = self.identity.contactKey
         self.identity = identity
+        // Другой контакт: опросы и доставки прежнего (и его запросы в полёте) ему
+        // не достаются; события сессии прежнего пользователя — тоже, если он не
+        // был анонимом (аноним → пользователь — тот же человек).
+        if prevKey != identity.contactKey {
+            engagement?.identityChanged(fromAnonymous: prevKey.isAnonymous)
+        }
         // Обновляем реалтайм-контекст и push-регистрацию на лету.
         if let config, !config.agentId.isEmpty, let realtime {
             Task {
@@ -328,6 +352,14 @@ public final class RespondoEngine: ConversationHost, EngagementHost {
             properties: properties.isEmpty ? nil : properties
         )
         Task { try? await api.track(body) } // best-effort
+        // Событие-триггер оверлей-опроса срабатывает сразу, без сетевого круга.
+        engagement?.eventTracked(name)
+    }
+
+    /// Открыть оверлей-опрос по id (из редактора опроса, «Additional ways to share»).
+    public func startSurvey(_ surveyId: String) {
+        guard initialized else { queue.enqueue(.startSurvey(surveyId)); return }
+        engagement?.startSurvey(surveyId)
     }
 
     public func open() {
@@ -394,6 +426,8 @@ public final class RespondoEngine: ConversationHost, EngagementHost {
     public func setCurrentScreen(_ name: String?) {
         let changed = currentScreen != name
         currentScreen = name
+        // Таргетинг опросов по экрану: новый экран — правила перечитываются.
+        if changed, initialized { engagement?.screenDidChange() }
         // Смена экрана = аналог SPA-навигации: перепланируем проактив под новую страницу.
         if changed, initialized, theme.proactiveMessagesEnabled {
             engagement?.scheduleProactive(delay: TimeInterval(theme.proactiveDelaySeconds))
@@ -454,6 +488,7 @@ public final class RespondoEngine: ConversationHost, EngagementHost {
             case .close: close()
             case .openNews: openNews()
             case .openChecklists: openChecklists()
+            case .startSurvey(let id): startSurvey(id)
             case .setPushToken(let token): setPushToken(token)
             case .clearPushToken: clearPushToken()
             // Полный путь: пре-init пуши проходят дедуп markProcessed (при enqueue

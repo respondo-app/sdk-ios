@@ -19,7 +19,10 @@ enum RealtimeEvent: Equatable {
     case messageUpdated(MessagePatch)
     case campaignConversation(conversationId: String, message: MessageDTO?)
     /// Подходящие оверлеи (surveys in_modal + banners) — приходит на identify/launch.
-    case overlayShow(items: [JSONValue])
+    /// `contact` — ключ контакта из штампа `data.identity` (для кого сервер их
+    /// посчитал); nil — кадр без штампа. Получатель отбрасывает кадр, ключ
+    /// которого не совпадает с текущим (api-surface.md §3.3).
+    case overlayShow(items: [JSONValue], contact: RespondoIdentity.ContactKey?)
     /// Подтверждение подписки на беседу.
     case subscribed(conversationId: String)
     /// Ошибка обработки клиентского кадра (`invalid conversation_id` / `conversation not found` / `forbidden`).
@@ -48,6 +51,9 @@ enum RealtimeProtocol {
         frame["user_hash"] = nonEmpty(userHash)
         frame["lang"] = nonEmpty(lang)
         frame["conversation_id"] = nonEmpty(conversationId)
+        // SDK сам исполняет таргетинг опросов — серверу можно пушить таргетированные.
+        frame["features"] = [SurveyTargeting.feature]
+        frame["platform"] = SurveyTargeting.clientPlatform
         return encode(frame)
     }
 
@@ -89,8 +95,12 @@ enum RealtimeProtocol {
             return nil
         case "overlay.show":
             // Каталог оверлеев (engagement-слой Ф3): items — сырые объекты кампаний.
-            let items = ((object["data"] as? [String: Any])?["items"] as? [Any])?.map(JSONValue.from) ?? []
-            return .overlayShow(items: items)
+            let payload = object["data"] as? [String: Any]
+            let items = (payload?["items"] as? [Any])?.map(JSONValue.from) ?? []
+            let contact = (payload?["identity"] as? [String: Any]).map {
+                RespondoIdentity.ContactKey(userId: $0["user_id"] as? String, email: $0["email"] as? String)
+            }
+            return .overlayShow(items: items, contact: contact)
         case "subscribed":
             guard let cid = object["conversation_id"] as? String else { return nil }
             return .subscribed(conversationId: cid)

@@ -37,7 +37,7 @@ Or add it to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/respondo-app/sdk-ios", from: "0.2.0")
+    .package(url: "https://github.com/respondo-app/sdk-ios", from: "0.3.0")
 ],
 targets: [
     .target(

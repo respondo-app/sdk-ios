@@ -85,6 +85,14 @@ public enum Respondo {
         onMain { RespondoEngine.shared.openChecklists() }
     }
 
+    /// Открыть оверлей-опрос сейчас, на любом экране — id опроса из редактора
+    /// («Additional ways to share»). Правила экранов, задержка, событие и аудитория
+    /// не проверяются; опрос должен быть запущен, и отвеченный повторно не
+    /// показывается. Вызов до `initialize` буферизуется.
+    public static func startSurvey(_ surveyId: String) {
+        onMain { RespondoEngine.shared.startSurvey(surveyId) }
+    }
+
     public static func setPushToken(_ token: String) {
         onMain { RespondoEngine.shared.setPushToken(token) }
     }

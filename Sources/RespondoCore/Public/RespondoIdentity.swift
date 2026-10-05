@@ -33,3 +33,31 @@ public struct RespondoIdentity: Sendable, Equatable {
         (userId ?? "").isEmpty && (email ?? "").isEmpty && userHash == nil
     }
 }
+
+extension RespondoIdentity {
+    /// Ключ контакта для `identify()`: userId и email (email без регистра,
+    /// пробелы по краям не значимы). Смена ключа — другой контакт; имя,
+    /// `userHash` и свойства контакт не меняют.
+    struct ContactKey: Equatable {
+        let userId: String?
+        let email: String?
+
+        /// Ключ по сырым полям (из `identify()` или штампа `overlay.show`):
+        /// пустое после обрезки пробелов — поля нет, email без регистра.
+        init(userId: String?, email: String?) {
+            func clean(_ value: String?) -> String? {
+                guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+                    return nil
+                }
+                return trimmed
+            }
+            self.userId = clean(userId)
+            self.email = clean(email)?.lowercased()
+        }
+
+        /// Анонимный визитёр: ни userId, ни email.
+        var isAnonymous: Bool { userId == nil && email == nil }
+    }
+
+    var contactKey: ContactKey { ContactKey(userId: userId, email: email) }
+}

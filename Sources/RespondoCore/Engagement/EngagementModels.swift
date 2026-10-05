@@ -70,6 +70,44 @@ public struct RespondoQuestion: Sendable, Equatable, Identifiable {
     }
 }
 
+/// Правило экрана: сравнивается с именем из `Respondo.setCurrentScreen`.
+/// `op`: exact | contains | not_contains | starts_with | ends_with.
+public struct RespondoScreenRule: Sendable, Equatable {
+    public let op: String
+    public let value: String
+
+    public init(op: String, value: String) {
+        self.op = op
+        self.value = value
+    }
+}
+
+/// «Когда и где» оверлей-опроса в приложении (backend survey_targeting.go).
+/// Пусто — опрос открывается на любом экране сразу, как раньше.
+public struct RespondoSurveyTargeting: Sendable, Equatable {
+    /// Экраны, на которых опрос ждут; пусто — любой экран.
+    public let screenRules: [RespondoScreenRule]
+    /// Сколько секунд пробыть на подходящем экране (после события, если оно задано).
+    public let delaySeconds: Int
+    /// Событие `Respondo.track`, по которому опрос открывается (канон имени).
+    public let triggerEvent: String?
+    /// Показывается ли опрос в приложениях («Show on»: сайт и приложения или
+    /// только приложения). Опрос только для сайта каталог SDK не отдаёт.
+    public let showsInApps: Bool
+
+    public init(
+        screenRules: [RespondoScreenRule] = [], delaySeconds: Int = 0, triggerEvent: String? = nil,
+        showsInApps: Bool = true
+    ) {
+        self.screenRules = screenRules
+        self.delaySeconds = delaySeconds
+        self.triggerEvent = triggerEvent
+        self.showsInApps = showsInApps
+    }
+
+    public static let none = RespondoSurveyTargeting()
+}
+
 /// Оверлей-опрос (NPS/CSAT и др.), доставленный посетителю.
 public struct RespondoSurvey: Sendable, Equatable, Identifiable {
     public let campaignId: String
@@ -85,13 +123,18 @@ public struct RespondoSurvey: Sendable, Equatable, Identifiable {
     public let steps: [[String]]
     public let questions: [RespondoQuestion]
     public let sender: RespondoSender?
+    /// Экран, время и событие, которых опрос ждёт. Пустой `deliveryId` — опрос
+    /// с таргетингом, ещё не открытый: доставку SDK получает в момент показа.
+    public let targeting: RespondoSurveyTargeting
 
-    public var id: String { deliveryId }
+    /// Ключ опроса: кампания (у ещё не открытого таргетированного опроса доставки нет).
+    public var id: String { campaignId }
 
     public init(
         campaignId: String, deliveryId: String, name: String, format: RespondoSurveyFormat,
         intro: String?, thanks: String?, showIntroScreen: Bool, showProgress: Bool, showDismiss: Bool,
-        steps: [[String]], questions: [RespondoQuestion], sender: RespondoSender?
+        steps: [[String]], questions: [RespondoQuestion], sender: RespondoSender?,
+        targeting: RespondoSurveyTargeting = .none
     ) {
         self.campaignId = campaignId
         self.deliveryId = deliveryId
@@ -105,6 +148,7 @@ public struct RespondoSurvey: Sendable, Equatable, Identifiable {
         self.steps = steps
         self.questions = questions
         self.sender = sender
+        self.targeting = targeting
     }
 }
 

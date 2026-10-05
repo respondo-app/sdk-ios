@@ -40,6 +40,9 @@ struct EngagementParams {
     }
 
     /// Для `/widget/surveys` и `/widget/banners` (channel_id обязателен).
+    /// user_hash обязателен для каналов с identity verification: без подписи
+    /// сервер понижает email/user_id до анонима, а оверлеи анониму не уходят
+    /// (тот же дефект, что у веб-виджета в инциденте 2026-09-07).
     var catalogQuery: [String: String?] {
         [
             "agent_id": agentId,
@@ -48,6 +51,7 @@ struct EngagementParams {
             "visitor_id": visitorId,
             "email": email,
             "user_id": userId,
+            "user_hash": userHash,
         ]
     }
 
@@ -236,8 +240,19 @@ final class ApiClient: Sendable {
         let _: OkResponseDTO = try await postEmpty(url)
     }
 
-    func widgetSurveys(_ params: EngagementParams) async throws -> SurveysCatalogResponseDTO {
-        let url = endpoints.api("/api/v1/widget/surveys", query: params.catalogQuery)
+    /// Каталог оверлей-опросов. SDK объявляет `features=survey_targeting`: он сам
+    /// исполняет правила экранов, задержку и событие, поэтому сервер отдаёт ему и
+    /// таргетированные опросы (без delivery_id до открытия). `surveyId` открывает
+    /// один опрос — сервер минтит доставку; `explicit` — это `startSurvey(id)`
+    /// (source=api: без правил и аудитории, но с расписанием и уже данным ответом).
+    func widgetSurveys(_ params: EngagementParams, surveyId: String? = nil, explicit: Bool = false) async throws -> SurveysCatalogResponseDTO {
+        var query = params.catalogQuery
+        query["features"] = SurveyTargeting.feature
+        // Опрос «только сайт» приложению не нужен — сервер его не отдаст.
+        query["platform"] = SurveyTargeting.clientPlatform
+        query["survey_id"] = surveyId
+        query["source"] = explicit ? "api" : nil
+        let url = endpoints.api("/api/v1/widget/surveys", query: query)
         return try await get(url)
     }
 

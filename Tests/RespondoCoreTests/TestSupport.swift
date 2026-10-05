@@ -31,6 +31,9 @@ final class FakeHttpEngine: HttpEngine, @unchecked Sendable {
     private(set) var sentRequests: [HttpRequest] = []
     /// Искусственная задержка ответа (для проверки гонок инициализации).
     var responseDelay: TimeInterval = 0
+    /// Хук перед ответом (после задержки): действие, которое успевает между
+    /// ответом сервера и его обработкой (например, `reset()` посреди запроса).
+    var beforeResponse: (@Sendable (HttpRequest) async -> Void)?
     private let lock = NSLock()
 
     func stub(pathContains: String, status: Int = 200, json: String) {
@@ -42,6 +45,7 @@ final class FakeHttpEngine: HttpEngine, @unchecked Sendable {
         if responseDelay > 0 {
             try await Task.sleep(nanoseconds: UInt64(responseDelay * 1_000_000_000))
         }
+        await beforeResponse?(request)
         let path = request.url.absoluteString
         for entry in stubs where path.contains(entry.match) {
             return HttpResponse(status: entry.stub.status, data: Data(entry.stub.json.utf8), headers: [:])
@@ -155,19 +159,20 @@ final class EngagementEnv {
     let host: FakeEngagementHost
     let engine: FakeHttpEngine
 
-    init(engine: FakeHttpEngine) {
+    init(engine: FakeHttpEngine, prefs: Preferences) {
         self.engine = engine
         let api = ApiClient(engine: engine, baseUrl: "https://api.respondo.ai")
         let host = FakeEngagementHost()
         self.host = host
-        self.controller = EngagementController(apiClient: api, host: host)
+        self.controller = EngagementController(apiClient: api, host: host, prefs: prefs)
     }
 }
 
-/// Собирает окружение engagement с фейковым транспортом и хостом.
+/// Собирает окружение engagement с фейковым транспортом и хостом. Общий `prefs`
+/// — то же хранилище после перезапуска приложения.
 @MainActor
-func makeEngagement(engine: FakeHttpEngine = FakeHttpEngine()) -> EngagementEnv {
-    EngagementEnv(engine: engine)
+func makeEngagement(engine: FakeHttpEngine = FakeHttpEngine(), prefs: Preferences = InMemoryPreferences()) -> EngagementEnv {
+    EngagementEnv(engine: engine, prefs: prefs)
 }
 
 /// Ждёт выполнения условия с таймаутом (для асинхронных Task внутри контроллеров).

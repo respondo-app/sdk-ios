@@ -39,7 +39,15 @@ enum EngagementMapper {
             showDismiss: content.showDismiss ?? true,
             steps: steps,
             questions: questions,
-            sender: toSender(dto.fromSender)
+            sender: toSender(dto.fromSender),
+            targeting: RespondoSurveyTargeting(
+                screenRules: (content.surveyScreenRules ?? []).map {
+                    RespondoScreenRule(op: $0.op, value: $0.value ?? "")
+                },
+                delaySeconds: SurveyTargeting.clampDelay(content.surveyDelaySeconds),
+                triggerEvent: nonEmpty(SurveyTargeting.normalizeEventName(content.surveyTriggerEvent ?? "")),
+                showsInApps: SurveyTargeting.showsInApps(content.surveyPlatform)
+            )
         )
     }
 

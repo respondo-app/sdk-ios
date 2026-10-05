@@ -9,6 +9,8 @@ enum StorageKeys {
     static let visitorId = "respondoai_visitor_id"
     static let lang = "respondoai_lang"
     static let collectedEmail = "respondoai_collected_email"
+    /// Доставки опросов, которые посетитель закрыл (JSON-массив, новые в конце).
+    static let surveyDismissed = "respondo_survey_dismissed"
 
     /// Блоб беседы: `respondoai_{agentId||"ch"}_{channelId||"default"}`.
     static func conversationBlob(agentId: String, channelId: String?) -> String {

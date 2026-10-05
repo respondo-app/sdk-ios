@@ -8,6 +8,7 @@ enum RespondoCommand {
     case close
     case openNews
     case openChecklists
+    case startSurvey(String)
     case setPushToken(String)
     case clearPushToken
     case handlePush(RespondoPushPayload)

@@ -46,6 +46,13 @@ struct QuestionDTO: Codable, Equatable {
     let required: Bool?
 }
 
+// MARK: - Правило экрана опроса (backend domain/pageurl.Rule)
+
+struct PageRuleDTO: Codable, Equatable {
+    let op: String
+    let value: String?
+}
+
 // MARK: - OutboundContent (подмножество для survey/banner)
 
 struct OutboundContentDTO: Codable, Equatable {
@@ -58,6 +65,12 @@ struct OutboundContentDTO: Codable, Equatable {
     let showIntroScreen: Bool?
     let showDismiss: Bool?
     let showProgress: Bool?
+    /// Таргетинг оверлей-опроса для приложений (survey_url_rules — только веб,
+    /// SDK их не читает намеренно).
+    let surveyPlatform: String?
+    let surveyScreenRules: [PageRuleDTO]?
+    let surveyDelaySeconds: Int?
+    let surveyTriggerEvent: String?
     let bannerLinkLabel: String?
     let bannerBg: String?
     let bannerFg: String?
@@ -81,6 +94,10 @@ struct OutboundContentDTO: Codable, Equatable {
         case showIntroScreen = "show_intro_screen"
         case showDismiss = "show_dismiss"
         case showProgress = "show_progress"
+        case surveyPlatform = "survey_platform"
+        case surveyScreenRules = "survey_screen_rules"
+        case surveyDelaySeconds = "survey_delay_seconds"
+        case surveyTriggerEvent = "survey_trigger_event"
         case bannerLinkLabel = "banner_link_label"
         case bannerBg = "banner_bg"
         case bannerFg = "banner_fg"
