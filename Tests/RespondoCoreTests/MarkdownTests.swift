@@ -30,6 +30,61 @@ final class MarkdownTests: XCTestCase {
         XCTAssertEqual(inlines, [MarkdownInline(text: "https://x.io", link: "https://x.io")])
     }
 
+    func testBareHttpLinkAutolinksAndStripsTrailingPunctuation() {
+        let inlines = Markdown.parseInline("open https://foo.bar/path?q=1!")
+        XCTAssertEqual(inlines, [
+            MarkdownInline(text: "open "),
+            MarkdownInline(text: "https://foo.bar/path?q=1", link: "https://foo.bar/path?q=1"),
+            MarkdownInline(text: "!"),
+        ])
+    }
+
+    func testBareLinkKeepsBalancedParenthesesAndTrimsUnmatchedClosing() {
+        let inlines = Markdown.parseInline("see https://example.com/a_(b))")
+        XCTAssertEqual(inlines.dropFirst().first, MarkdownInline(text: "https://example.com/a_(b)", link: "https://example.com/a_(b)"))
+        XCTAssertEqual(inlines.last, MarkdownInline(text: ")"))
+    }
+
+    func testBareLinkStopsAtUnmatchedClosingBeforeFollowingText() {
+        let inlines = Markdown.parseInline("see https://example.com/a)tail")
+        XCTAssertEqual(inlines.dropFirst().first, MarkdownInline(text: "https://example.com/a", link: "https://example.com/a"))
+        XCTAssertEqual(inlines.last, MarkdownInline(text: ")tail"))
+    }
+
+    func testBareLinkPreservesUnderscoresAndIsCaseInsensitive() {
+        let inlines = Markdown.parseInline("HTTP://EXAMPLE.COM/a_b")
+        XCTAssertEqual(inlines, [MarkdownInline(text: "HTTP://EXAMPLE.COM/a_b", link: "HTTP://EXAMPLE.COM/a_b")])
+    }
+
+    func testBareLinkDoesNotAutolinkInsideCodeOrMarkdownLink() {
+        XCTAssertEqual(
+            Markdown.parseInline("`https://code.example`"),
+            [MarkdownInline(text: "https://code.example", code: true)]
+        )
+        XCTAssertEqual(
+            Markdown.parseInline("[docs](https://docs.example)"),
+            [MarkdownInline(text: "docs", link: "https://docs.example")]
+        )
+    }
+
+    func testMarkdownLinkKeepsBalancedParenthesesInDestination() {
+        XCTAssertEqual(
+            Markdown.parseInline("[docs](https://example.com/a_(b))"),
+            [MarkdownInline(text: "docs", link: "https://example.com/a_(b)")]
+        )
+    }
+
+    func testBareLinkRequiresTokenBoundary() {
+        XCTAssertEqual(
+            Markdown.parseInline("prefixhttps://example.com javascript:https://example.com bad\\https://example.com"),
+            [MarkdownInline(text: "prefixhttps://example.com javascript:https://example.com bad\\https://example.com")]
+        )
+    }
+
+    func testUnsafeMarkdownLinkHasNoLinkInInlineModel() {
+        XCTAssertEqual(Markdown.parseInline("[run](javascript:alert)"), [MarkdownInline(text: "run")])
+    }
+
     // MARK: - Злые/неполные входы
 
     func testUnclosedBoldMakesRestBold() {
@@ -65,11 +120,54 @@ final class MarkdownTests: XCTestCase {
         XCTAssertEqual(blocks[3].ordinal, 2)
     }
 
-    func testHeadingRendersAsParagraph() {
+    func testHeadingRendersAsBoldParagraph() {
         let blocks = Markdown.parse("# Title\ntext")
         XCTAssertEqual(blocks.count, 2)
         XCTAssertEqual(blocks[0].kind, .paragraph)
-        XCTAssertEqual(blocks[0].inlines, [MarkdownInline(text: "Title")], "решётки заголовка срезаны")
+        XCTAssertEqual(blocks[0].inlines, [MarkdownInline(text: "Title", bold: true)], "решётки срезаны, строка жирная")
+    }
+
+    // Реальное тело макроса в каноническом виде (2026-10-30): абзацы через пустую строку,
+    // H2 из редактора макросов, список и цитата.
+    private let macroBody = "Good day,\n\n## Steps\n\n- open the bot\n- press **Stop**\n\n"
+        + "> It takes a minute\n\nOlga from Acme Support here.\nThank you for contacting us!"
+
+    func testBlankLineIsParagraphGapOncePerRun() {
+        XCTAssertEqual(
+            Markdown.parse(macroBody).map(\.kind),
+            [.paragraph, .gap, .paragraph, .gap, .bullet, .bullet, .gap, .paragraph, .gap, .paragraph, .paragraph]
+        )
+        XCTAssertEqual(Markdown.parse("\n\na\n\n\n\nb\n\n").map(\.kind), [.paragraph, .gap, .paragraph])
+    }
+
+    func testQuoteLosesMarkerAndNoSyntaxSurvives() {
+        let blocks = Markdown.parse(macroBody)
+        XCTAssertEqual(blocks[7].inlines.map(\.text).joined(), "It takes a minute")
+        let text = String(Markdown.attributedString(from: macroBody).characters)
+        XCTAssertFalse(text.contains("#"))
+        XCTAssertFalse(text.contains(">"))
+        XCTAssertFalse(text.contains("\\"))
+        XCTAssertTrue(text.contains("Good day,\n\nSteps\n\n"), "пустая строка между абзацами сохранена")
+        XCTAssertTrue(text.contains("here.\nThank you"), "простой перенос — без пустой строки")
+    }
+
+    // Картинка тела макроса — ссылка с подписью alt (пустой alt — адресом), без «!».
+    func testImageIsLinkWithoutBang() {
+        let inlines = Markdown.parseInline("See ![](https://cdn.example.com/x.png) and ![shot](https://cdn.example.com/a.png)")
+        XCTAssertFalse(inlines.map(\.text).joined().contains("!"))
+        XCTAssertEqual(inlines.filter { $0.link != nil }, [
+            MarkdownInline(text: "https://cdn.example.com/x.png", link: "https://cdn.example.com/x.png"),
+            MarkdownInline(text: "shot", link: "https://cdn.example.com/a.png"),
+        ])
+    }
+
+    // Рыхлый список импорта («1. a\n\n2. b\n\n3. c») держит номера источника, а не «1. 1. 1.»;
+    // ленивая нумерация «1. 1.» идёт по порядку, серию рвёт только другой блок.
+    func testLooseOrderedListKeepsSourceNumbers() {
+        let loose = Markdown.parse("1. Open the bot\n\n2. Press Stop\n\n3. Wait").filter { $0.kind == .ordered }
+        XCTAssertEqual(loose.map(\.ordinal), [1, 2, 3])
+        let lazy = Markdown.parse("1. a\n1. b\n\ntext\n\n4. c").filter { $0.kind == .ordered }
+        XCTAssertEqual(lazy.map(\.ordinal), [1, 2, 4])
     }
 
     func testEmptySourceYieldsEmptyParagraph() {
@@ -112,5 +210,15 @@ final class MarkdownTests: XCTestCase {
     func testAttributedStringRendersListMarker() {
         let attr = Markdown.attributedString(from: "- item")
         XCTAssertTrue(String(attr.characters).contains("•"), "маркер списка присутствует в тексте")
+    }
+
+    // `\#` в начале строки — литерал `#`, не заголовок: канонический вид тела хранит этот экран
+    // (паритет с Android и Flutter).
+    func testEscapedHeadingIsPlainText() {
+        let blocks = Markdown.parse("\\# of orders: 5\n## Real")
+        XCTAssertEqual(blocks.count, 2)
+        XCTAssertEqual(blocks[0].inlines.map(\.text).joined(), "# of orders: 5")
+        XCTAssertFalse(blocks[0].inlines.contains { $0.bold })
+        XCTAssertEqual(blocks[1].inlines, [MarkdownInline(text: "Real", bold: true)])
     }
 }

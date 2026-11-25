@@ -10,10 +10,19 @@ final class PushManager {
     private let agentId: String
     private let channelId: String?
 
-    /// Токен, переданный до готовности контекста (регистрируется позже).
+    /// Последний переданный токен (регистрирует `registerPending`).
     private var pendingToken: String?
     /// Текущий зарегистрированный токен (для unregister).
     private(set) var registeredToken: String?
+    /// Токен устройства, известный SDK (переданный или зарегистрированный).
+    var token: String? { pendingToken ?? registeredToken }
+    /// Тело последней регистрации, ушедшей или в полёте (без `sessionToken` — сервер его не
+    /// читает): то же тело второй раз не уходит. Сбой и снятие токена его сбрасывают.
+    private var lastRegistration: PushRegisterRequestDTO?
+    /// Тапы, обработанные раньше, чем стал известен токен (`reportOpened`): бикон открытия
+    /// уходит, как только токен появится (`adopt`). Не больше `openedWithoutTokenCap`.
+    private var openedWithoutToken: [RespondoPushPayload] = []
+    private let openedWithoutTokenCap = 10
     /// message_id уже обработанных пушей (гасим дубликаты).
     private var seenMessageIds = Set<String>()
     private let bundleId = Bundle.main.bundleIdentifier
@@ -25,10 +34,13 @@ final class PushManager {
         self.channelId = channelId
     }
 
-    /// Сохраняет токен и регистрирует его на бэкенде.
-    func setToken(_ token: String, identity: RespondoIdentity) {
+    /// Запоминает токен без сети: бикон открытия пуша уходит с ним сразу (и биконы, ждавшие
+    /// токена, — сейчас), регистрацию делает `registerPending` после ответа identify.
+    func adopt(_ token: String) {
         pendingToken = token
-        registerPending(identity: identity)
+        let waiting = openedWithoutToken
+        openedWithoutToken = []
+        for payload in waiting { reportOpened(payload) }
     }
 
     /// Регистрирует ранее запомненный токен (вызывается после init и на смену identity).
@@ -50,11 +62,19 @@ final class PushManager {
             sessionToken: identityStore.sessionToken(agentId: agentId, channelId: channelId),
             environment: ApnsEnvironment.current
         )
+        // То же тело (токен, личность, визитёр) уже ушло или в полёте — не повторяем: на холодном
+        // старте регистрацию после ответа identify просят и setPushToken, и identify.
+        var unsessioned = body
+        unsessioned.sessionToken = nil
+        let key = unsessioned
+        guard key != lastRegistration else { return }
+        lastRegistration = key
         Task {
             do {
                 try await apiClient.pushRegister(body)
                 registeredToken = token
             } catch {
+                if lastRegistration == key { lastRegistration = nil }
                 RespondoLog.warn("push register failed: \(String(describing: error))")
             }
         }
@@ -65,6 +85,8 @@ final class PushManager {
         let token = registeredToken ?? pendingToken
         pendingToken = nil
         registeredToken = nil
+        lastRegistration = nil
+        openedWithoutToken = []
         guard let token else { return }
         let body = PushUnregisterRequestDTO(channelId: channelId, token: token)
         Task {
@@ -82,13 +104,20 @@ final class PushManager {
         return seenMessageIds.insert(messageId).inserted
     }
 
-    /// Телеметрия открытия push-уведомления.
+    /// Телеметрия открытия push-уведомления. Токен — последний переданный, даже если его
+    /// регистрация ещё ждёт ответа identify: сервер находит устройство по токену с прошлого
+    /// запуска. Токена ещё нет (тап холодного старта раньше `setPushToken`) — бикон ждёт `adopt`:
+    /// без токена сервер открытие не засчитывает.
     func reportOpened(_ payload: RespondoPushPayload) {
-        guard registeredToken != nil || payload.deliveryId != nil || payload.messageId != nil else { return }
+        guard let token = pendingToken ?? registeredToken else {
+            openedWithoutToken.append(payload)
+            if openedWithoutToken.count > openedWithoutTokenCap { openedWithoutToken.removeFirst() }
+            return
+        }
         let body = PushOpenedRequestDTO(
             deliveryId: payload.deliveryId,
             messageId: payload.messageId,
-            token: registeredToken ?? ""
+            token: token
         )
         Task {
             do {

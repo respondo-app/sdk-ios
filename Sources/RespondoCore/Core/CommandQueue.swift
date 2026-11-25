@@ -33,6 +33,11 @@ struct CommandQueue {
         }
     }
 
+    /// Снимает отложенные `identify`: личность `initialize(config:identity:)` новее их.
+    mutating func dropIdentify() {
+        commands.removeAll { if case .identify = $0 { return true } else { return false } }
+    }
+
     /// Возвращает команды для проигрывания, схлопывая множественные identify до последнего.
     func replayOrder() -> [RespondoCommand] {
         // Индекс последнего identify — только он применяется (личность это состояние).

@@ -115,11 +115,40 @@ final class ApiClient: Sendable {
         return try await post(url, body: body, timeout: 20)
     }
 
-    func upload(fileName: String, mimeType: String, data: Data) async throws -> ChatAttachmentDTO {
+    /// Загрузка вложения. Форма (гейт `/chat/upload` требует креды): `agent_id` — всегда;
+    /// `conversation_id` и ключи владения (`session_token`, `user_hash`, `visitor_id`,
+    /// только непустые) — когда `conversationId` непуст и непуст `session_token` или
+    /// `user_hash`, иначе ни беседы, ни ключей. Текстовые части идут до части `file`.
+    func upload(
+        fileName: String,
+        mimeType: String,
+        data: Data,
+        agentId: String,
+        conversationId: String?,
+        ownership: OwnershipParams
+    ) async throws -> ChatAttachmentDTO {
         let url = endpoints.api("/api/v1/chat/upload")
         let boundary = "respondo-\(UUID().uuidString)"
         var payload = Data()
         func append(_ string: String) { payload.append(string.data(using: .utf8)!) }
+        func nonEmpty(_ value: String?) -> String? {
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }
+        var fields: [(String, String)] = [("agent_id", agentId)]
+        let token = nonEmpty(ownership.sessionToken)
+        let userHash = nonEmpty(ownership.userHash)
+        if let conversationId = nonEmpty(conversationId), token != nil || userHash != nil {
+            fields.append(("conversation_id", conversationId))
+            if let token { fields.append(("session_token", token)) }
+            if let userHash { fields.append(("user_hash", userHash)) }
+            if let visitorId = nonEmpty(ownership.visitorId) { fields.append(("visitor_id", visitorId)) }
+        }
+        for (name, value) in fields {
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+            append("\(value)\r\n")
+        }
         append("--\(boundary)\r\n")
         append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n")
         append("Content-Type: \(mimeType)\r\n\r\n")
@@ -184,7 +213,25 @@ final class ApiClient: Sendable {
 
     func escalate(conversationId: String, ownership: OwnershipParams) async throws -> EscalationResponseDTO {
         let url = endpoints.api("/api/v1/chat/conversations/\(conversationId)/escalate", query: ownership.query)
-        return try await postEmpty(url)
+        var request = HttpRequest(method: .post, url: url)
+        request.headers["Content-Type"] = "application/json"
+        applyCommonHeaders(&request)
+        let response = try await engine.send(request)
+        guard (200...299).contains(response.status) else {
+            // Отказ несёт текст для клиента на его языке (`message`) —
+            // карточка отказа рисуется им, а не строкой SDK.
+            let body = try? Self.decoder.decode(BackendError.self, from: response.data)
+            throw EscalationRefused(status: response.status, customerMessage: body?.message)
+        }
+        return try decode(response.data)
+    }
+
+    /// `POST /chat/conversations/{id}/rating` — оценка 1–5 и необязательный
+    /// отзыв (behavior.md §12). Не-2xx — `TransportError.backend(status,
+    /// message: error, code:)`: 409 `rating not requested` / `remark locked`.
+    func rateConversation(conversationId: String, body: RatingRequestDTO, ownership: OwnershipParams) async throws -> RatingResponseDTO {
+        let url = endpoints.api("/api/v1/chat/conversations/\(conversationId)/rating", query: ownership.query)
+        return try await post(url, body: body)
     }
 
     func continueWithAI(conversationId: String, ownership: OwnershipParams) async throws {
@@ -210,6 +257,27 @@ final class ApiClient: Sendable {
 
     func track(_ body: TrackEventRequestDTO) async throws {
         let url = endpoints.api("/api/v1/widget/events")
+        let _: EmptyResponse = try await post(url, body: body)
+    }
+
+    /// `POST /widget/identify` — личность и свойства `identify()` в профиль контакта
+    /// сразу. true — сервер создал контакт этой личности (`created`).
+    /// Ответ без тела или другого вида — не сбой: контакт просто не «создан».
+    @discardableResult
+    func identify(_ body: IdentifyRequestDTO) async throws -> Bool {
+        let url = endpoints.api("/api/v1/widget/identify")
+        var request = HttpRequest(method: .post, url: url, body: try Self.encoder.encode(body))
+        request.headers["Content-Type"] = "application/json"
+        applyCommonHeaders(&request)
+        let response = try await engine.send(request)
+        try ensureOK(response)
+        let answer = try? Self.decoder.decode(IdentifyResponseDTO.self, from: response.data)
+        return answer?.created == true
+    }
+
+    /// `POST /widget/app-session` — сессия приложения (запуск / возврат из фона).
+    func appSession(_ body: AppSessionRequestDTO) async throws {
+        let url = endpoints.api("/api/v1/widget/app-session")
         let _: EmptyResponse = try await post(url, body: body)
     }
 
@@ -339,8 +407,8 @@ final class ApiClient: Sendable {
 
     private func ensureOK(_ response: HttpResponse) throws {
         guard !(200...299).contains(response.status) else { return }
-        let message = (try? Self.decoder.decode(BackendError.self, from: response.data))?.error
-        throw TransportError.backend(status: response.status, message: message)
+        let body = try? Self.decoder.decode(BackendError.self, from: response.data)
+        throw TransportError.backend(status: response.status, message: body?.error, code: body?.code)
     }
 
     private func decode<T: Decodable>(_ data: Data) throws -> T {

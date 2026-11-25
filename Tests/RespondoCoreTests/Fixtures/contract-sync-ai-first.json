@@ -1,0 +1,44 @@
+{
+  "body": {
+    "conversation_id": "00000000-0000-0000-0000-000000000000",
+    "doc_links": [
+      {
+        "title": "Connecting channels",
+        "url": "https://respondo.example.com/docs/channels"
+      }
+    ],
+    "human_handover": false,
+    "lang": "en",
+    "message": {
+      "author_avatar_url": "https://respondo.example.com/agents/contract/avatar.png",
+      "author_name": "Contract Bot",
+      "confidence": 1,
+      "content": "Open Channels, press Add channel and pick the channel type.",
+      "conversation_id": "00000000-0000-0000-0000-000000000000",
+      "created_at": "1970-01-01T00:00:00Z",
+      "delivery_status": "sent",
+      "id": "00000000-0000-0000-0000-000000000000",
+      "role": "assistant",
+      "sources": [
+        {
+          "chunk_id": "",
+          "score": 0,
+          "title": "Connecting channels",
+          "url": "https://respondo.example.com/docs/channels"
+        }
+      ],
+      "tokens_used": 30
+    },
+    "session_token": "\u003csession_token\u003e",
+    "status_texts": {
+      "back_to_ai": "Chat returned to AI assistant. How can I help you?",
+      "resolved": "Conversation closed. Thank you for reaching out!"
+    },
+    "suggested_questions": [
+      "How do I connect Telegram?",
+      "How much does it cost?",
+      "How do I set working hours?"
+    ]
+  },
+  "status": 200
+}

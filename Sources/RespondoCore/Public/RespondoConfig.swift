@@ -44,6 +44,7 @@ public struct RespondoTheme: Sendable, Equatable {
 /// опционален и, если задан, авторитетно уточняет канал/оформление поверх агента.
 public struct RespondoConfig: Sendable, Equatable {
     public let agentId: String
+    /// id канала Mobile SDK (Settings › Channels в дашборде). Передаётся как `channel_id`.
     public var channelId: String?
     /// Дефолт: https://api.respondo.ai
     public var baseUrl: String?

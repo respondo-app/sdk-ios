@@ -24,14 +24,25 @@ struct MessageBubbleView: View {
                 }
                 VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
                     if !isUser, let author = message.authorName, !author.isEmpty {
-                        Text(author)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(RespondoPalette.subtleInk)
+                        HStack(spacing: 6) {
+                            Text(author)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(RespondoPalette.subtleInk)
+                            Text(MessageDateFormatter.timeLabel(message.createdAt, lang: strings.lang))
+                                .font(.system(size: 10))
+                                .foregroundColor(RespondoPalette.subtleInk)
+                        }
                     }
                     bubbleContent
                     attachmentsView
                     sourcesView
-                    if isUser { deliveryStatusView }
+                    if isUser {
+                        deliveryStatusView
+                    } else if message.authorName?.isEmpty != false {
+                        Text(MessageDateFormatter.timeLabel(message.createdAt, lang: strings.lang))
+                            .font(.system(size: 10))
+                            .foregroundColor(RespondoPalette.subtleInk)
+                    }
                 }
                 if !isUser { Spacer(minLength: 40) }
             }
@@ -91,7 +102,11 @@ struct MessageBubbleView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(RespondoPalette.subtleInk)
                 ForEach(message.sources) { source in
-                    Button { if let url = URL(string: source.url) { onSourceTap(url) } } label: {
+                    Button {
+                        if Markdown.isSafeLink(source.url), let url = URL(string: source.url) {
+                            onSourceTap(url)
+                        }
+                    } label: {
                         Text(source.title)
                             .font(.system(size: 13))
                             .foregroundColor(theme.linkColor.swiftUIColor)
@@ -106,20 +121,42 @@ struct MessageBubbleView: View {
 
     @ViewBuilder
     private var deliveryStatusView: some View {
-        switch message.deliveryStatus {
-        case .sending:
-            Text("•••").font(.system(size: 11)).foregroundColor(RespondoPalette.subtleInk)
-        case .sent:
-            Image(systemName: "checkmark").font(.system(size: 10)).foregroundColor(RespondoPalette.subtleInk)
-        case .failed:
-            Button { onRetry(message.id) } label: {
-                Label(strings("sendRetry"), systemImage: "arrow.clockwise")
-                    .font(.system(size: 11)).foregroundColor(.red)
+        HStack(spacing: 6) {
+            Text(MessageDateFormatter.timeLabel(message.createdAt, lang: strings.lang))
+                .font(.system(size: 10))
+                .foregroundColor(RespondoPalette.subtleInk)
+            switch message.deliveryStatus {
+            case .sending:
+                Text("•••").font(.system(size: 11)).foregroundColor(RespondoPalette.subtleInk)
+            case .sent:
+                Image(systemName: "checkmark").font(.system(size: 10)).foregroundColor(RespondoPalette.subtleInk)
+            case .failed:
+                Button { onRetry(message.id) } label: {
+                    Label(strings("sendRetry"), systemImage: "arrow.clockwise")
+                        .font(.system(size: 11)).foregroundColor(.red)
+                }
+                .buttonStyle(.plain)
+            case .none:
+                EmptyView()
             }
-            .buttonStyle(.plain)
-        case .none:
-            EmptyView()
         }
+    }
+
+    /// Centered day marker used by ChatView between messages from different
+    /// local calendar days.
+    static func dateSeparator(_ message: ChatMessage, strings: UIStrings) -> some View {
+        HStack(spacing: 8) {
+            Rectangle().fill(RespondoPalette.hairline).frame(height: 1)
+            Text(MessageDateFormatter.dayLabel(message.createdAt, lang: strings.lang))
+                .font(.system(size: 11))
+                .foregroundColor(RespondoPalette.subtleInk)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(RespondoPalette.assistantBubble)
+                .clipShape(Capsule())
+            Rectangle().fill(RespondoPalette.hairline).frame(height: 1)
+        }
+        .padding(.vertical, 6)
     }
 
     private var systemBubble: some View {
@@ -284,6 +321,133 @@ struct QuestionChips: View {
                 }
             }
             .padding(.horizontal, 16)
+        }
+    }
+}
+
+/// Оценка беседы (behavior.md §12): «How was your experience?» и пять
+/// кружков 1–5 в конце ленты закрытой беседы, выбранный — цветом бренда.
+/// После выбора — «спасибо» и необязательный отзыв («Tell us more»): поле на
+/// 3 строки и Send цветом бренда; без Skip — не написать и есть пропуск.
+/// После отправки — отзыв одной строкой и Edit, пока правка доступна; Edit
+/// ставит курсор в поле, уход из поля без изменений возвращает строку отзыва.
+struct RatingBlockView: View {
+    let rating: ConversationRating
+    let theme: ResolvedTheme
+    let saving: Bool
+    let remarkSaving: Bool
+    let label: (String) -> String
+    let onRate: (Int) -> Void
+    let onSendRemark: (String) async -> Bool
+    let onEditRemark: () -> Void
+    let onCancelEdit: () -> Void
+
+    /// Потолок отзыва — как у сервера (conversation.MaxRemarkRunes).
+    static let remarkMax = 1000
+
+    @State private var draft = ""
+    @FocusState private var remarkFocused: Bool
+
+    private var typing: Bool { rating.remarkStep == .open || rating.remarkStep == .editing }
+    private var canSend: Bool {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !remarkSaving && !t.isEmpty && t != rating.remark
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text(label("ratingQuestion"))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(RespondoPalette.ink)
+            HStack(spacing: 8) {
+                ForEach(1...5, id: \.self) { n in
+                    Button { onRate(n) } label: {
+                        Text("\(n)")
+                            .font(.system(size: 14, weight: .medium))
+                            .frame(width: 32, height: 32)
+                            .foregroundColor(rating.value == n ? theme.onPrimaryColor.swiftUIColor : RespondoPalette.ink)
+                            .background(Circle().fill(rating.value == n ? theme.primaryColor.swiftUIColor : Color.white))
+                            .overlay(Circle().stroke(rating.value == n ? theme.primaryColor.swiftUIColor : Color(white: 0.85), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(saving)
+                    .accessibilityLabel("\(n) / 5")
+                    .accessibilityAddTraits(rating.value == n ? .isSelected : [])
+                }
+            }
+            if rating.value > 0 {
+                Text(label("ratingThanks")).font(.system(size: 12)).foregroundColor(.secondary)
+            }
+            if rating.remarkVisible && typing && rating.remarkEditable {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(label("ratingRemarkPrompt")).font(.system(size: 12, weight: .medium)).foregroundColor(RespondoPalette.ink)
+                    // TextEditor (iOS 15): поле на 3 строки, плейсхолдер — поверх.
+                    ZStack(alignment: .topLeading) {
+                        TextEditor(text: $draft)
+                            .font(.system(size: 14))
+                            .frame(height: 68)
+                            .disabled(remarkSaving)
+                            .focused($remarkFocused)
+                        if draft.isEmpty {
+                            Text(label("ratingRemarkPlaceholder"))
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 5).padding(.vertical, 8)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .padding(4)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(white: 0.85), lineWidth: 1))
+                        .onChange(of: draft) { value in
+                            if value.unicodeScalars.count > Self.remarkMax {
+                                draft = String(String.UnicodeScalarView(value.unicodeScalars.prefix(Self.remarkMax)))
+                            }
+                        }
+                    HStack {
+                        Spacer()
+                        Button(label("ratingSend")) {
+                            let text = draft
+                            Task { if await onSendRemark(text) { draft = "" } }
+                        }
+                        .font(.system(size: 14, weight: .medium))
+                        .padding(.horizontal, 14).frame(height: 32)
+                        .foregroundColor(theme.onPrimaryColor.swiftUIColor)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(theme.primaryColor.swiftUIColor))
+                        .opacity(canSend ? 1 : 0.5)
+                        .disabled(!canSend)
+                    }
+                }
+                .frame(maxWidth: 320)
+            }
+            if rating.value > 0 && rating.remarkStep == .sent && !rating.remark.isEmpty {
+                HStack(spacing: 8) {
+                    Text(rating.remark).font(.system(size: 14)).lineLimit(1).truncationMode(.tail)
+                        .foregroundColor(RespondoPalette.ink)
+                    Spacer(minLength: 0)
+                    if rating.remarkEditable {
+                        Button(label("ratingEdit"), action: onEditRemark)
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 10).frame(height: 28)
+                            .foregroundColor(RespondoPalette.ink)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(white: 0.85), lineWidth: 1))
+                    }
+                }
+                .frame(maxWidth: 320)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .onChange(of: rating.remarkStep) { step in
+            // Правка начинается с сохранённого отзыва, курсор — в поле.
+            if step == .editing {
+                draft = rating.remark
+                remarkFocused = true
+            }
+        }
+        .onChange(of: remarkFocused) { focused in
+            // Поле правки покинули без изменений — назад к строке отзыва.
+            guard !focused, rating.remarkStep == .editing, !remarkSaving else { return }
+            if draft.trimmingCharacters(in: .whitespacesAndNewlines) == rating.remark { onCancelEdit() }
         }
     }
 }

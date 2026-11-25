@@ -59,14 +59,7 @@ public final class LocalizedStrings: @unchecked Sendable {
         return supportedLocales.contains(base) ? base : "en"
     }
 
-    /// Детект локали по тексту первого пользовательского сообщения
-    /// (украинские `іїєІЇЄ` → uk; иная кириллица → ru; иначе — nil).
-    public static func detectFromText(_ text: String) -> String? {
-        let ukrainian = CharacterSet(charactersIn: "іїєґІЇЄҐ")
-        let cyrillic = CharacterSet(charactersIn: "абвгдежзийклмнопрстуфхцчшщъыьэюяАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
-        let scalars = text.unicodeScalars
-        if scalars.contains(where: { ukrainian.contains($0) }) { return "uk" }
-        if scalars.contains(where: { cyrillic.contains($0) }) { return "ru" }
-        return nil
-    }
+    // Язык по тексту посетителя SDK не определяет (решение 2026-11-02): язык
+    // беседы решает сервер и присылает его (`visitor_language` конфига, `lang` ответа `/chat`,
+    // `conversation_updated{lang}`).
 }

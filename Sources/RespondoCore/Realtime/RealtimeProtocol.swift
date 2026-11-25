@@ -14,6 +14,10 @@ struct MessagePatch: Equatable {
 enum RealtimeEvent: Equatable {
     case newMessage(MessageDTO)
     case statusChanged(newStatus: String)
+    /// Карточки статусов на языке клиента из ответа поллинга (`status_texts`).
+    /// Не кадр сокета: поллинг отдаёт их до перехода статуса, и контроллер
+    /// рисует карточку ими.
+    case statusTexts(StatusTextsDTO)
     case typing(authorName: String?)
     case conversationUpdated(field: String?, lang: String?)
     case messageUpdated(MessagePatch)
@@ -51,8 +55,10 @@ enum RealtimeProtocol {
         frame["user_hash"] = nonEmpty(userHash)
         frame["lang"] = nonEmpty(lang)
         frame["conversation_id"] = nonEmpty(conversationId)
-        // SDK сам исполняет таргетинг опросов — серверу можно пушить таргетированные.
-        frame["features"] = [SurveyTargeting.feature]
+        // SDK сам исполняет таргетинг опросов — серверу можно пушить таргетированные;
+        // сессии приложения SDK сообщает сам (`/widget/app-session`) — его identify
+        // сервер активностью не считает.
+        frame["features"] = [SurveyTargeting.feature, AppSessionTracker.wsFeature]
         frame["platform"] = SurveyTargeting.clientPlatform
         return encode(frame)
     }

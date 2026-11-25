@@ -86,6 +86,25 @@ final class ConversationControllerTests: XCTestCase {
         XCTAssertEqual(controller.lang, "en")
     }
 
+    /// Решение 2026-11-02: язык по тексту посетителя SDK не определяет — до языка сервера хром
+    /// остаётся на стартовой локали; язык, который дал сервер, держится.
+    func testChromeFollowsOnlyTheServerLanguage() async throws {
+        let engine = FakeHttpEngine()
+        engine.stub(pathContains: "/api/v1/chat", json: #"{"conversation_id":"c1","human_handover":false}"#)
+        let (controller, _, _) = makeController(engine: engine)
+        controller.send(text: "Дякую")
+        XCTAssertEqual(controller.lang, "ru", "текст посетителя язык не меняет")
+        try await waitUntil { !controller.isLoading }
+        XCTAssertEqual(controller.lang, "ru", "ответ без lang язык не меняет")
+
+        controller.handle(.conversationUpdated(field: nil, lang: "uk"))
+        XCTAssertEqual(controller.lang, "uk")
+        controller.send(text: "Добрый день, всё работает?")
+        XCTAssertEqual(controller.lang, "uk", "язык беседы дал сервер")
+        try await waitUntil { !controller.isLoading }
+        XCTAssertEqual(controller.lang, "uk")
+    }
+
     func testEmailValidation() {
         XCTAssertTrue(ConversationController.isValidEmail("a@b.com"))
         XCTAssertFalse(ConversationController.isValidEmail("nope"))

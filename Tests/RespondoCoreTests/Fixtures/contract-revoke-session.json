@@ -1,0 +1,14 @@
+{
+  "resume_after": {
+    "body": {
+      "error": "forbidden"
+    },
+    "status": 403
+  },
+  "revoke": {
+    "body": {
+      "revoked": true
+    },
+    "status": 200
+  }
+}

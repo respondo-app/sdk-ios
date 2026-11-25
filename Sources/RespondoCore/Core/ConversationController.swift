@@ -20,6 +20,34 @@ public final class ConversationController: ObservableObject {
     @Published public private(set) var needsEmail = false
     @Published public private(set) var pendingFiles: [ChatAttachment] = []
     @Published public private(set) var historyHasMore = false
+    /// Оценка беседы (CSAT 1–5) и отзыв нынешнего закрытия (behavior.md §12).
+    @Published public private(set) var rating = ConversationRating.none
+    @Published public private(set) var ratingSaving = false
+    @Published public private(set) var remarkSaving = false
+
+    /// Блок оценки — только под закрытой беседой, чьё закрытие попросило оценку.
+    public var ratingVisible: Bool { rating.visible(for: conversationId, closed: conversationClosed) }
+
+    /// Тексты блока оценки: серверные (язык клиента) поверх строк SDK.
+    public func ratingLabel(_ key: String) -> String {
+        let server: String?
+        switch key {
+        case "ratingQuestion": server = statusTexts.ratingQuestion
+        case "ratingThanks": server = statusTexts.ratingThanks
+        case "ratingRemarkPrompt": server = statusTexts.ratingRemarkPrompt
+        case "ratingRemarkPlaceholder": server = statusTexts.ratingRemarkPlaceholder
+        case "ratingSend": server = statusTexts.ratingSend
+        case "ratingEdit": server = statusTexts.ratingEdit
+        default: server = nil
+        }
+        return ServerTexts.or(server, strings.string(key, lang: lang))
+    }
+
+    /// Последние карточки статусов на языке клиента (`status_texts` сервера из
+    /// poll, resume, `/chat` и `/escalate`). Кадр WS `status_changed` языка не
+    /// несёт — карточки «вернулся к ИИ» и «чат завершён» рисуются ими, строки
+    /// SDK — фолбэк.
+    private(set) var statusTexts = StatusTexts()
 
     /// Максимальная длина исходящего сообщения. Серверный контракт `POST /api/v1/chat`
     /// валидирует `message` как `min=1,max=750` (chat_dto.go). Go считает длину в РУНАХ
@@ -162,8 +190,15 @@ public final class ConversationController: ObservableObject {
         // было от чего форкаться. Статус решает здесь только одно — есть ли ещё
         // что слушать на этой строке.
         conversationId = resume.conversationId
+        statusTexts = statusTexts.merging(resume.statusTexts)
         isEscalated = (resume.status == "escalated")
         conversationClosed = Self.isClosedStatus(resume.status)
+        rating = rating.next(
+            resume.conversationId,
+            requested: resume.ratingRequested == true,
+            value: resume.visitorRating ?? 0,
+            remark: serverRemark(resume.ratingRemark, resume.ratingRemarkEditable)
+        )
         // Свежий session_token из resume — источник правды: пробрасываем его в host,
         // чтобы он записался в хранилище ДО subscribe/history. Хранимый токен НЕ
         // затирает свежий; без беседы вовсе отдаём nil — токен очистится.
@@ -192,6 +227,14 @@ public final class ConversationController: ObservableObject {
 
     /// Оптимистичная отправка текстового сообщения (+ прикреплённые файлы).
     public func send(text rawText: String) {
+        send(text: rawText, inputSource: InputSource.typed)
+    }
+
+    /// `input_source` неотправленных реплик по localId — retry шлёт тот же источник.
+    private var inputSources: [String: String] = [:]
+
+    /// Отправка с источником текста: `typed` — набрал посетитель; пилюля, подсказка — SDK за него.
+    func send(text rawText: String, inputSource: String) {
         // Обрезаем до серверного лимита 750 рун (иначе бэкенд ответит 400).
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         let text = Self.clampedMessage(trimmed)
@@ -203,6 +246,8 @@ public final class ConversationController: ObservableObject {
         let localId = String(Int(Date().timeIntervalSince1970 * 1000)) // без дефиса — признак локального id
         let bubbleContent = text.isEmpty ? files.map { $0.filename }.joined(separator: "\n") : text
         let apiMessage = text.isEmpty ? strings.string("fileSentPlaceholder", lang: lang) : text
+        // Заглушка вложения — текст SDK, не слова посетителя (сервер не выбирает по ней язык).
+        let source = text.isEmpty ? InputSource.filesPlaceholder : inputSource
 
         let optimistic = ChatMessage(
             id: localId,
@@ -218,10 +263,11 @@ public final class ConversationController: ObservableObject {
         suggestedQuestions = []
         isLoading = true
 
-        // Детект локали по тексту пользователя.
-        if let detected = LocalizedStrings.detectFromText(text) { switchLang(detected) }
+        // Язык по тексту пользователя SDK не определяет: язык беседы решает сервер и возвращает его
+        // полем `lang` ответа (applyServerLang).
 
-        Task { await performSend(localId: localId, apiMessage: apiMessage, attachments: files) }
+        inputSources[localId] = source
+        Task { await performSend(localId: localId, apiMessage: apiMessage, attachments: files, inputSource: source) }
     }
 
     /// Повтор отправки ранее упавшего сообщения.
@@ -233,10 +279,11 @@ public final class ConversationController: ObservableObject {
         let content = messages[index].content
         let files = messages[index].attachments
         let apiMessage = content.isEmpty ? strings.string("fileSentPlaceholder", lang: lang) : content
-        Task { await performSend(localId: messageId, apiMessage: apiMessage, attachments: files) }
+        let source = inputSources[messageId] ?? (content.isEmpty ? InputSource.filesPlaceholder : InputSource.typed)
+        Task { await performSend(localId: messageId, apiMessage: apiMessage, attachments: files, inputSource: source) }
     }
 
-    private func performSend(localId: String, apiMessage: String, attachments: [ChatAttachment]) async {
+    private func performSend(localId: String, apiMessage: String, attachments: [ChatAttachment], inputSource: String) async {
         let identity = host?.currentIdentity() ?? RespondoIdentity()
         let auto = host?.autoMetadata() ?? [:]
         var metadata = auto
@@ -260,13 +307,15 @@ public final class ConversationController: ObservableObject {
                 userHash: identity.userHash,
                 visitorId: identityStore.visitorId(),
                 metadata: metadata,
-                properties: identity.properties.isEmpty ? nil : identity.properties
+                properties: identity.effectiveProperties.isEmpty ? nil : identity.effectiveProperties
             ),
-            sessionToken: host?.ownership().sessionToken
+            sessionToken: host?.ownership().sessionToken,
+            inputSource: inputSource
         )
 
         do {
             let response = try await apiClient.chat(body)
+            inputSources[localId] = nil
             applyChatResponse(response, localId: localId)
         } catch {
             markFailed(localId: localId)
@@ -284,14 +333,37 @@ public final class ConversationController: ObservableObject {
         // на старой значило бы форкать её снова каждым сообщением.
         adoptSession(id: response.conversationId, sessionToken: response.sessionToken)
 
+        // Карточки статусов на языке клиента — на будущие WS-переходы.
+        statusTexts = statusTexts.merging(response.statusTexts)
+        // Язык беседы после хода — как событие conversation_updated{lang}: на
+        // новую беседу подписка начинается после этого ответа, и событие
+        // первого хода до SDK не доходит.
+        if let newLang = response.lang, !newLang.isEmpty { applyServerLang(newLang) }
+
         let handover = response.humanHandover ?? false
+        // Стандартное уведомление о передаче — само карточка: пузырь ответа уже
+        // говорит его текстом, вторая карточка рядом его бы повторила.
+        let cannedNotice = handover && ServerTexts.isCannedHandover(response.message)
         if handover {
             if !isEscalated {
-                appendSystem(id: "escalation-\(localId)", content: strings.string("escalatedMessage", lang: lang))
+                if !cannedNotice {
+                    // На языке клиента (handover_card_text сервера), а не
+                    // строкой SDK на UI-локали приложения.
+                    let card = ServerTexts.handoverCardText(
+                        response: response.handoverCardText,
+                        notice: response.message,
+                        fallback: strings.string("escalatedMessage", lang: lang)
+                    )
+                    appendSystem(id: "escalation-\(localId)", content: card)
+                }
                 setEscalated(true)
             }
         }
-        if let dto = response.message {
+        // Эхо реплики клиента на ветке передачи (тред уже у людей) — не
+        // уведомление: пузырь клиента уже нарисован оптимистично, второй
+        // рядом его бы повторил. Карточка выше — текстом сервера.
+        if let dto = response.message,
+           !(handover && MessageMapper.normalizedRole(dto.role) == .user) {
             let message = withDocLinks(MessageMapper.toChatMessage(dto), docLinks: response.docLinks)
             upsert(message)
             if message.isFromHumanAgent { agentHasReplied = true }
@@ -352,7 +424,10 @@ public final class ConversationController: ObservableObject {
             return false
         }
         do {
-            let dto = try await apiClient.upload(fileName: fileName, mimeType: mimeType, data: data)
+            let dto = try await apiClient.upload(
+                fileName: fileName, mimeType: mimeType, data: data,
+                agentId: agentId, conversationId: conversationId, ownership: ownershipParams()
+            )
             pendingFiles.append(ChatAttachment(id: dto.id, filename: dto.filename, contentType: dto.contentType, size: dto.size, url: dto.url))
             return true
         } catch {
@@ -368,7 +443,10 @@ public final class ConversationController: ObservableObject {
     // MARK: - Suggested / quick questions
 
     public func sendSuggested(_ question: String) {
-        send(text: question)
+        // AI-подсказка последнего ответа или пилюля быстрого вопроса (до первой реплики): текст
+        // набрал SDK, а не посетитель — сервер не выбирает по нему язык беседы.
+        let source = suggestedQuestions.contains(question) ? InputSource.suggestion : InputSource.quickQuestion
+        send(text: question, inputSource: source)
     }
 
     // MARK: - Эскалация
@@ -386,12 +464,17 @@ public final class ConversationController: ObservableObject {
             // пользователя не доходил, а следующее сообщение форкало третью
             // строку, выбивая вторую из цепочки.
             adoptSession(id: response.conversationId, sessionToken: response.sessionToken)
+            statusTexts = statusTexts.merging(response.statusTexts)
             // Клиенту показываем только факт передачи оператору. Никаких ссылок
             // на внутренние системы (тикет-трекер и т.п.) — это наша кухня.
-            appendSystem(id: "handover-\(cid)", content: strings.string("escalatedMessage", lang: lang))
+            // Текст — серверный (`message`, на языке клиента), строка SDK — фолбэк.
+            appendSystem(id: "handover-\(cid)", content: ServerTexts.or(response.message, strings.string("escalatedMessage", lang: lang)))
             setEscalated(true)
             suggestedQuestions = []
             persist()
+        } catch let refused as EscalationRefused {
+            // Отказ — серверный текст на языке клиента («передать не вышло»).
+            appendSystem(id: "escalate-error-\(cid)", content: ServerTexts.or(refused.customerMessage, strings.string("networkError", lang: lang)))
         } catch {
             appendSystem(id: "escalate-error-\(cid)", content: strings.string("networkError", lang: lang))
         }
@@ -418,7 +501,7 @@ public final class ConversationController: ObservableObject {
         try? await apiClient.continueWithAI(conversationId: cid, ownership: ownershipParams())
         setEscalated(false)
         agentHasReplied = false
-        appendSystem(id: "back-to-ai-\(cid)", content: strings.string("backToAI", lang: lang))
+        appendSystem(id: "back-to-ai-\(cid)", content: ServerTexts.or(statusTexts.backToAI, strings.string("backToAI", lang: lang)))
     }
 
     // MARK: - История (пагинация вверх)
@@ -438,7 +521,7 @@ public final class ConversationController: ObservableObject {
                 historyHasMore = page.hasMore ?? false
             }
         } catch let error as TransportError {
-            if case .backend(let status, _) = error, status == 403 || status == 404 {
+            if case .backend(let status, _, _) = error, status == 403 || status == 404 {
                 historyHasMore = false // перестаём листать
             }
         } catch {
@@ -462,10 +545,12 @@ public final class ConversationController: ObservableObject {
             handleMessageUpdated(patch)
         case .statusChanged(let status):
             handleStatusChanged(status)
+        case .statusTexts(let texts):
+            statusTexts = statusTexts.merging(texts)
         case .typing(let author):
             handleTyping(author)
         case .conversationUpdated(_, let newLang):
-            if let newLang { switchLang(newLang) }
+            if let newLang, !newLang.isEmpty { applyServerLang(newLang) }
         case .campaignConversation(let cid, let message):
             handleCampaign(conversationId: cid, message: message)
         case .subscribed:
@@ -513,11 +598,11 @@ public final class ConversationController: ObservableObject {
         case "agent", "bot":
             if isEscalated || status == "agent" {
                 setEscalated(false)
-                appendSystem(id: "back-to-ai-ws", content: strings.string("backToAI", lang: lang))
+                appendSystem(id: "back-to-ai-ws", content: ServerTexts.or(statusTexts.backToAI, strings.string("backToAI", lang: lang)))
                 agentHasReplied = false
             }
         case "resolved":
-            appendSystem(id: "resolved-ws", content: strings.string("resolvedMessage", lang: lang))
+            appendSystem(id: "resolved-ws", content: ServerTexts.or(statusTexts.resolved, strings.string("resolvedMessage", lang: lang)))
             scheduleResolvedReset()
         default:
             break
@@ -574,6 +659,88 @@ public final class ConversationController: ObservableObject {
         host?.conversationDidClose(sessionToken: nil)
         host?.escalationDidChange(false)
         persist()
+        // Просили ли оценить это закрытие, знает только опрос: сокет о запросе
+        // не говорит (behavior.md §12) — один опрос после закрытия.
+        Task { [weak self] in await self?.refreshRating() }
+    }
+
+    // MARK: - Оценка беседы (CSAT)
+
+    /// Один опрос беседы: запрос оценки, выбранная цифра и отзыв.
+    public func refreshRating() async {
+        guard let cid = conversationId else { return }
+        do {
+            let resp = try await apiClient.messages(conversationId: cid, after: nil, ownership: ownershipParams())
+            guard cid == conversationId else { return }
+            statusTexts = statusTexts.merging(resp.statusTexts)
+            // Выбор и отзыв, которые сейчас сохраняются, важнее ответа опроса.
+            let fresh = !ratingSaving && !remarkSaving
+            rating = rating.next(
+                cid,
+                requested: resp.ratingRequested == true,
+                value: fresh ? resp.visitorRating : nil,
+                remark: fresh ? serverRemark(resp.ratingRemark, resp.ratingRemarkEditable) : nil
+            )
+        } catch {
+            RespondoLog.debug("rating poll failed: \(error)")
+        }
+    }
+
+    /// Оценка 1–5: оптимистично, откат при отказе; 409 — оценку этого
+    /// закрытия уже не просят, блок уходит.
+    public func rate(_ score: Int) async {
+        guard let cid = conversationId, !ratingSaving, (1...5).contains(score) else { return }
+        let prev = rating
+        rating.value = score
+        ratingSaving = true
+        defer { ratingSaving = false }
+        do {
+            let resp = try await apiClient.rateConversation(
+                conversationId: cid, body: RatingRequestDTO(score: score, remark: nil), ownership: ownershipParams())
+            guard cid == conversationId else { return }
+            if resp.remark != nil || resp.remarkEditable != nil {
+                rating = rating.saved(resp.remark ?? "", editable: resp.remarkEditable ?? true)
+            }
+        } catch TransportError.backend(let status, _, _) where status == 409 {
+            if cid == conversationId { rating = rating.next(cid, requested: false) }
+        } catch {
+            if cid == conversationId { rating = prev }
+        }
+    }
+
+    /// Отзыв («Tell us more») с текущей оценкой: одна запись и одна правка;
+    /// 409 `remark locked` — Edit уходит. Другая ошибка — текст остаётся в поле.
+    @discardableResult
+    public func sendRemark(_ text: String) async -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let cid = conversationId, !remarkSaving, rating.value > 0, !trimmed.isEmpty else { return false }
+        remarkSaving = true
+        defer { remarkSaving = false }
+        do {
+            let resp = try await apiClient.rateConversation(
+                conversationId: cid, body: RatingRequestDTO(score: rating.value, remark: trimmed), ownership: ownershipParams())
+            if cid == conversationId {
+                rating = rating.saved(resp.remark ?? trimmed, editable: resp.remarkEditable ?? false)
+            }
+            return true
+        } catch TransportError.backend(let status, let message, _) where status == 409 {
+            if cid == conversationId {
+                rating = message == "remark locked" ? rating.locked() : rating.next(cid, requested: false)
+            }
+            return false
+        } catch {
+            return false
+        }
+    }
+
+    /// Нажали Edit у отправленного отзыва.
+    public func editRemark() {
+        rating = rating.edit()
+    }
+
+    /// Поле правки покинули без изменений — назад к сохранённому отзыву.
+    public func cancelRemarkEdit() {
+        rating = rating.cancelEdit()
     }
 
     // MARK: - Read-квитанции
@@ -601,6 +768,11 @@ public final class ConversationController: ObservableObject {
     }
 
     // MARK: - Локаль
+
+    /// Язык беседы, который дал сервер: переключает локаль.
+    private func applyServerLang(_ newLang: String) {
+        switchLang(newLang)
+    }
 
     private func switchLang(_ newLang: String) {
         let normalized = LocalizedStrings.normalize(newLang)
@@ -665,6 +837,8 @@ public final class ConversationController: ObservableObject {
         typingAuthor = nil
         isEscalated = false
         agentHasReplied = false
+        statusTexts = StatusTexts()
+        rating = .none
         needsEmail = false
         pendingFiles = []
         conversationId = nil

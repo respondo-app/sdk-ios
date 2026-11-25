@@ -1,0 +1,95 @@
+{
+  "body": {
+    "conversation_id": "00000000-0000-0000-0000-000000000000",
+    "doc_links": [
+      {
+        "title": "Connecting channels",
+        "url": "https://respondo.example.com/docs/channels"
+      }
+    ],
+    "human_handover": false,
+    "lang": "en",
+    "message": {
+      "author_avatar_url": "https://respondo.example.com/agents/contract/avatar.png",
+      "author_name": "Contract Bot",
+      "confidence": 1,
+      "content": "Take a look at these.",
+      "conversation_id": "00000000-0000-0000-0000-000000000000",
+      "created_at": "1970-01-01T00:00:00Z",
+      "delivery_status": "sent",
+      "id": "00000000-0000-0000-0000-000000000000",
+      "metadata": {
+        "products": [
+          {
+            "available": true,
+            "currency": "USD",
+            "price_minor": 4999,
+            "product_id": 101,
+            "title": "Red dress",
+            "url": "https://respondo.example.com/p/101?utm_campaign=product_cards\u0026utm_content=00000000-0000-0000-0000-000000000000\u0026utm_medium=chat\u0026utm_source=respondo",
+            "variants": [
+              {
+                "available": true,
+                "id": "m",
+                "label": "M",
+                "price_minor": 4999
+              }
+            ]
+          },
+          {
+            "available": true,
+            "currency": "USD",
+            "price_minor": 5999,
+            "product_id": 102,
+            "title": "Crimson dress",
+            "url": "https://respondo.example.com/p/102?utm_campaign=product_cards\u0026utm_content=00000000-0000-0000-0000-000000000000\u0026utm_medium=chat\u0026utm_source=respondo",
+            "variants": []
+          }
+        ]
+      },
+      "role": "assistant",
+      "sources": [
+        {
+          "chunk_id": "",
+          "score": 0,
+          "title": "Connecting channels",
+          "url": "https://respondo.example.com/docs/channels"
+        }
+      ],
+      "tokens_used": 30
+    },
+    "products": [
+      {
+        "available": true,
+        "currency": "USD",
+        "price_minor": 4999,
+        "product_id": 101,
+        "title": "Red dress",
+        "url": "https://respondo.example.com/p/101?utm_campaign=product_cards\u0026utm_content=00000000-0000-0000-0000-000000000000\u0026utm_medium=chat\u0026utm_source=respondo",
+        "variants": [
+          {
+            "available": true,
+            "id": "m",
+            "label": "M",
+            "price_minor": 4999
+          }
+        ]
+      },
+      {
+        "available": true,
+        "currency": "USD",
+        "price_minor": 5999,
+        "product_id": 102,
+        "title": "Crimson dress",
+        "url": "https://respondo.example.com/p/102?utm_campaign=product_cards\u0026utm_content=00000000-0000-0000-0000-000000000000\u0026utm_medium=chat\u0026utm_source=respondo",
+        "variants": []
+      }
+    ],
+    "session_token": "\u003csession_token\u003e",
+    "status_texts": {
+      "back_to_ai": "Chat returned to AI assistant. How can I help you?",
+      "resolved": "Conversation closed. Thank you for reaching out!"
+    }
+  },
+  "status": 200
+}

@@ -57,6 +57,10 @@ public enum Respondo {
         }
     }
 
+    /// Привязать личность визитёра. С `userId` или `email` контакт создаётся сразу
+    /// (`POST /widget/identify`, нужен `channelId`), без ожидания чата; `properties`,
+    /// `languageOverride` и `signedUpAt` уходят в профиль тем же запросом; вход
+    /// другого пользователя сообщает его сессию приложения.
     public static func identify(_ identity: RespondoIdentity) {
         onMain { RespondoEngine.shared.identify(identity) }
     }

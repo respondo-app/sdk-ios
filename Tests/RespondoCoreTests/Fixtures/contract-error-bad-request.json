@@ -1,0 +1,14 @@
+{
+  "bad_agent_id": {
+    "body": {
+      "error": "invalid agent_id"
+    },
+    "status": 400
+  },
+  "empty_message": {
+    "body": {
+      "error": "message is required"
+    },
+    "status": 400
+  }
+}

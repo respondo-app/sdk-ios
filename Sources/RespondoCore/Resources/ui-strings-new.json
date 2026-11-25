@@ -1,7 +1,7 @@
 {
   "_meta": {
     "source": "Respondo mobile SDK — native UI strings not present in web UI_STRINGS",
-    "note": "НОВЫЕ строки чат-UI мобильных SDK, которых нет в widget/src/Widget.tsx :: UI_STRINGS. Переведены на все 8 локалей спеки (перевод — модель Opus, 2026-07-23). Ключи weekdayMon..weekdaySun (для форматирования next_open_at по behavior.md §8, добавлены 2026-07-23) переведены на все локали 2026-07-23. Мобильные SDK встраивают этот файл рядом со strings.json; при отсутствии локали используется английский.",
+    "note": "НОВЫЕ строки чат-UI мобильных SDK, которых нет в widget/src/Widget.tsx :: UI_STRINGS. Переведены на все 8 локалей спеки (перевод — модель Opus, 2026-07-23). Ключи weekdayMon..weekdaySun (для форматирования next_open_at по behavior.md §8, добавлены 2026-07-23) переведены на все локали 2026-07-23. Мобильные SDK встраивают этот файл рядом со strings.json; при отсутствии локали используется английский. Ключи ratingQuestion, ratingThanks, ratingRemarkPrompt, ratingRemarkPlaceholder, ratingSend, ratingEdit (оценка беседы и отзыв «Tell us more», behavior.md §12) добавлены 2026-10-31 — фолбэк; основной текст приходит с сервера в status_texts.rating_*.",
     "locales": [
       "ru",
       "uk",
@@ -54,7 +54,13 @@
       "weekdayThu",
       "weekdayFri",
       "weekdaySat",
-      "weekdaySun"
+      "weekdaySun",
+      "ratingQuestion",
+      "ratingThanks",
+      "ratingRemarkPrompt",
+      "ratingRemarkPlaceholder",
+      "ratingSend",
+      "ratingEdit"
     ]
   },
   "ru": {
@@ -99,7 +105,13 @@
     "weekdayThu": "Четверг",
     "weekdayFri": "Пятница",
     "weekdaySat": "Суббота",
-    "weekdaySun": "Воскресенье"
+    "weekdaySun": "Воскресенье",
+    "ratingQuestion": "Как вам общение?",
+    "ratingThanks": "Спасибо за отзыв",
+    "ratingRemarkPrompt": "Расскажите подробнее",
+    "ratingRemarkPlaceholder": "Добавьте комментарий",
+    "ratingSend": "Отправить",
+    "ratingEdit": "Изменить"
   },
   "uk": {
     "send": "Надіслати",
@@ -143,7 +155,13 @@
     "weekdayThu": "Четвер",
     "weekdayFri": "П’ятниця",
     "weekdaySat": "Субота",
-    "weekdaySun": "Неділя"
+    "weekdaySun": "Неділя",
+    "ratingQuestion": "Як вам спілкування?",
+    "ratingThanks": "Дякуємо за відгук",
+    "ratingRemarkPrompt": "Розкажіть докладніше",
+    "ratingRemarkPlaceholder": "Додайте коментар",
+    "ratingSend": "Надіслати",
+    "ratingEdit": "Змінити"
   },
   "de": {
     "send": "Senden",
@@ -187,7 +205,13 @@
     "weekdayThu": "Donnerstag",
     "weekdayFri": "Freitag",
     "weekdaySat": "Samstag",
-    "weekdaySun": "Sonntag"
+    "weekdaySun": "Sonntag",
+    "ratingQuestion": "Wie war Ihre Erfahrung?",
+    "ratingThanks": "Danke für Ihr Feedback",
+    "ratingRemarkPrompt": "Erzählen Sie uns mehr",
+    "ratingRemarkPlaceholder": "Kommentar hinzufügen",
+    "ratingSend": "Senden",
+    "ratingEdit": "Bearbeiten"
   },
   "fr": {
     "send": "Envoyer",
@@ -231,7 +255,13 @@
     "weekdayThu": "Jeudi",
     "weekdayFri": "Vendredi",
     "weekdaySat": "Samedi",
-    "weekdaySun": "Dimanche"
+    "weekdaySun": "Dimanche",
+    "ratingQuestion": "Comment s’est passé l’échange ?",
+    "ratingThanks": "Merci pour votre avis",
+    "ratingRemarkPrompt": "Dites-nous en plus",
+    "ratingRemarkPlaceholder": "Ajouter un commentaire",
+    "ratingSend": "Envoyer",
+    "ratingEdit": "Modifier"
   },
   "es": {
     "send": "Enviar",
@@ -275,7 +305,13 @@
     "weekdayThu": "Jueves",
     "weekdayFri": "Viernes",
     "weekdaySat": "Sábado",
-    "weekdaySun": "Domingo"
+    "weekdaySun": "Domingo",
+    "ratingQuestion": "¿Qué tal fue tu experiencia?",
+    "ratingThanks": "Gracias por tu opinión",
+    "ratingRemarkPrompt": "Cuéntanos más",
+    "ratingRemarkPlaceholder": "Añade un comentario",
+    "ratingSend": "Enviar",
+    "ratingEdit": "Editar"
   },
   "pt": {
     "send": "Enviar",
@@ -319,7 +355,13 @@
     "weekdayThu": "Quinta-feira",
     "weekdayFri": "Sexta-feira",
     "weekdaySat": "Sábado",
-    "weekdaySun": "Domingo"
+    "weekdaySun": "Domingo",
+    "ratingQuestion": "Como foi sua experiência?",
+    "ratingThanks": "Obrigado pelo feedback",
+    "ratingRemarkPrompt": "Conte-nos mais",
+    "ratingRemarkPlaceholder": "Adicione um comentário",
+    "ratingSend": "Enviar",
+    "ratingEdit": "Editar"
   },
   "pl": {
     "send": "Wyślij",
@@ -363,7 +405,13 @@
     "weekdayThu": "Czwartek",
     "weekdayFri": "Piątek",
     "weekdaySat": "Sobota",
-    "weekdaySun": "Niedziela"
+    "weekdaySun": "Niedziela",
+    "ratingQuestion": "Jak oceniasz rozmowę?",
+    "ratingThanks": "Dziękujemy za opinię",
+    "ratingRemarkPrompt": "Powiedz nam więcej",
+    "ratingRemarkPlaceholder": "Dodaj komentarz",
+    "ratingSend": "Wyślij",
+    "ratingEdit": "Edytuj"
   },
   "en": {
     "send": "Send",
@@ -407,6 +455,12 @@
     "weekdayThu": "Thursday",
     "weekdayFri": "Friday",
     "weekdaySat": "Saturday",
-    "weekdaySun": "Sunday"
+    "weekdaySun": "Sunday",
+    "ratingQuestion": "How was your experience?",
+    "ratingThanks": "Thanks for your feedback",
+    "ratingRemarkPrompt": "Tell us more",
+    "ratingRemarkPlaceholder": "Add a comment",
+    "ratingSend": "Send",
+    "ratingEdit": "Edit"
   }
 }

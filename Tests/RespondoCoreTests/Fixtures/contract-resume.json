@@ -1,0 +1,48 @@
+{
+  "body": {
+    "conversation_id": "00000000-0000-0000-0000-000000000000",
+    "conversation_status": "open",
+    "has_more": false,
+    "history_conversation_id": "00000000-0000-0000-0000-000000000000",
+    "lang": "en",
+    "messages": [
+      {
+        "content": "How do I connect a new channel to my workspace?",
+        "conversation_id": "00000000-0000-0000-0000-000000000000",
+        "created_at": "1970-01-01T00:00:00Z",
+        "id": "00000000-0000-0000-0000-000000000000",
+        "role": "visitor"
+      },
+      {
+        "author_avatar_url": "https://respondo.example.com/agents/contract/avatar.png",
+        "author_name": "Contract Bot",
+        "confidence": 1,
+        "content": "Open Channels, press Add channel and pick the channel type.",
+        "conversation_id": "00000000-0000-0000-0000-000000000000",
+        "created_at": "1970-01-01T00:00:00Z",
+        "delivery_status": "sent",
+        "id": "00000000-0000-0000-0000-000000000000",
+        "role": "assistant",
+        "sources": [
+          {
+            "chunk_id": "",
+            "score": 0,
+            "title": "Connecting channels",
+            "url": "https://respondo.example.com/docs/channels"
+          }
+        ],
+        "tokens_used": 30
+      }
+    ],
+    "oldest_message_id": "00000000-0000-0000-0000-000000000000",
+    "rating_requested": false,
+    "session_token": "\u003csession_token\u003e",
+    "status": "open",
+    "status_texts": {
+      "back_to_ai": "Chat returned to AI assistant. How can I help you?",
+      "resolved": "Conversation closed. Thank you for reaching out!"
+    },
+    "widget_status": "bot"
+  },
+  "status": 200
+}

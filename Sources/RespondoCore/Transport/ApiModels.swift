@@ -78,6 +78,12 @@ struct MessageMetadataDTO: Codable, Equatable {
     let announcement: JSONValue?
     let surveyStep: JSONValue?
     let surveyInline: JSONValue?
+    /// Стандартное уведомление о передаче человеку (текст сервера): оно само —
+    /// карточка передачи, вторую рядом не рисуют.
+    var handoverCanned: Bool? = nil
+    /// Карточка «передано человеку» под ответом модели или своим текстом
+    /// агента — на языке клиента.
+    var handoverCardText: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case banner, announcement
@@ -86,6 +92,56 @@ struct MessageMetadataDTO: Codable, Equatable {
         case contentFormat = "content_format"
         case surveyStep = "survey_step"
         case surveyInline = "survey_inline"
+        case handoverCanned = "handover_canned"
+        case handoverCardText = "handover_card_text"
+    }
+}
+
+/// Карточки, которые SDK рисует сам по смене статуса беседы, на языке
+/// КЛИЕНТА (`status_texts`: каталог системных текстов сервера). Кадр WS
+/// `status_changed` языка не несёт — SDK запоминает последние из poll,
+/// resume, `/chat` и `/escalate`.
+struct StatusTextsDTO: Codable, Equatable {
+    var backToAI: String? = nil
+    var resolved: String? = nil
+    /// Блок оценки беседы — только пока закрытие просит оценку (behavior.md §12).
+    var ratingQuestion: String? = nil
+    var ratingThanks: String? = nil
+    var ratingRemarkPrompt: String? = nil
+    var ratingRemarkPlaceholder: String? = nil
+    var ratingSend: String? = nil
+    var ratingEdit: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case resolved
+        case backToAI = "back_to_ai"
+        case ratingQuestion = "rating_question"
+        case ratingThanks = "rating_thanks"
+        case ratingRemarkPrompt = "rating_remark_prompt"
+        case ratingRemarkPlaceholder = "rating_remark_placeholder"
+        case ratingSend = "rating_send"
+        case ratingEdit = "rating_edit"
+    }
+}
+
+/// Тело `POST /api/v1/chat/conversations/{id}/rating` (behavior.md §12):
+/// `score` — всегда, и вместе с отзывом; `client` — ios.
+struct RatingRequestDTO: Codable, Equatable {
+    var score: Int
+    var remark: String?
+    var client: String = "ios"
+}
+
+/// Ответ оценки: сохранённая оценка, отзыв и можно ли его ещё править.
+struct RatingResponseDTO: Codable, Equatable {
+    var ok: Bool? = nil
+    var score: Int? = nil
+    var remark: String? = nil
+    var remarkEditable: Bool? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case ok, score, remark
+        case remarkEditable = "remark_editable"
     }
 }
 
@@ -100,6 +156,8 @@ struct ChatRequestDTO: Codable, Equatable {
     var attachments: [ChatAttachmentDTO]?
     var identity: ChatIdentityDTO?
     var sessionToken: String?
+    /// Откуда текст сообщения (`InputSource`): набрал посетитель или SDK за него.
+    var inputSource: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case message, source, attachments, identity
@@ -108,7 +166,19 @@ struct ChatRequestDTO: Codable, Equatable {
         case conversationId = "conversation_id"
         case userEmail = "user_email"
         case sessionToken = "session_token"
+        case inputSource = "input_source"
     }
+}
+
+/// Значения `input_source` тела `POST /api/v1/chat` — как у веб-виджета. Текст, который набрал не
+/// посетитель, а SDK за него (пилюля быстрого вопроса, AI-подсказка, заглушка вложения), не слова
+/// клиента: сервер не выбирает по нему язык беседы (пилюли приходят на языке страницы, заглушка —
+/// на языке SDK).
+enum InputSource {
+    static let typed = "typed"
+    static let quickQuestion = "quick_question"
+    static let suggestion = "suggestion"
+    static let filesPlaceholder = "files_placeholder"
 }
 
 /// Тело ответа `POST /api/v1/chat`.
@@ -119,6 +189,15 @@ struct ChatResponseDTO: Codable, Equatable {
     let humanHandover: Bool?
     let suggestedQuestions: [String]?
     let docLinks: [DocLinkDTO]?
+    /// Текст карточки «передано человеку» на языке клиента; есть на каждой
+    /// ветке с `human_handover`. nil — старый бэкенд, карточка — строкой SDK.
+    var handoverCardText: String? = nil
+    /// Карточки статусов на языке клиента — на будущие WS-переходы.
+    var statusTexts: StatusTextsDTO? = nil
+    /// Язык беседы после хода — тот же, что у события
+    /// `conversation_updated{lang}`. На новой беседе SDK подписывается на неё
+    /// только после этого ответа, и событие первого хода до него не доходит.
+    var lang: String? = nil
 
     // Внимание: сюда НЕ добавляются ticket_url / ticket_id и любые другие
     // ссылки на внутренние системы. Это customer-facing DTO; зеркалит
@@ -131,6 +210,9 @@ struct ChatResponseDTO: Codable, Equatable {
         case humanHandover = "human_handover"
         case suggestedQuestions = "suggested_questions"
         case docLinks = "doc_links"
+        case handoverCardText = "handover_card_text"
+        case statusTexts = "status_texts"
+        case lang
     }
 }
 
@@ -143,6 +225,13 @@ struct ResumeResponseDTO: Codable, Equatable {
     let oldestMessageId: String?
     let conversationId: String?
     let sessionToken: String?
+    /// Карточки статусов на языке клиента (см. `StatusTextsDTO`).
+    var statusTexts: StatusTextsDTO? = nil
+    /// Оценка нынешнего закрытия: запрос, выбранная цифра, отзыв.
+    var ratingRequested: Bool? = nil
+    var visitorRating: Int? = nil
+    var ratingRemark: String? = nil
+    var ratingRemarkEditable: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
         case status, messages
@@ -151,6 +240,11 @@ struct ResumeResponseDTO: Codable, Equatable {
         case oldestMessageId = "oldest_message_id"
         case conversationId = "conversation_id"
         case sessionToken = "session_token"
+        case statusTexts = "status_texts"
+        case ratingRequested = "rating_requested"
+        case visitorRating = "visitor_rating"
+        case ratingRemark = "rating_remark"
+        case ratingRemarkEditable = "rating_remark_editable"
     }
 }
 
@@ -171,6 +265,23 @@ struct HistoryResponseDTO: Codable, Equatable {
 struct WidgetMessagesResponseDTO: Codable, Equatable {
     let messages: [MessageDTO]?
     let status: String?
+    /// Карточки статусов на языке клиента: сервер шлёт их, пока тред у людей
+    /// или закрыт.
+    var statusTexts: StatusTextsDTO? = nil
+    /// Оценка нынешнего закрытия: запрос, выбранная цифра, отзыв.
+    var ratingRequested: Bool? = nil
+    var visitorRating: Int? = nil
+    var ratingRemark: String? = nil
+    var ratingRemarkEditable: Bool? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case messages, status
+        case statusTexts = "status_texts"
+        case ratingRequested = "rating_requested"
+        case visitorRating = "visitor_rating"
+        case ratingRemark = "rating_remark"
+        case ratingRemarkEditable = "rating_remark_editable"
+    }
 }
 
 /// Ответ `POST /api/v1/chat/conversations/{id}/escalate`.
@@ -194,6 +305,9 @@ struct EscalationResponseDTO: Codable, Equatable {
     let sessionToken: String?
     /// Тред для пользователя тот же — ленту не сбрасываем.
     let previousConversationId: String?
+    /// Карточки статусов на языке клиента — «вернулся к ИИ», когда оператор
+    /// вернёт тред боту.
+    var statusTexts: StatusTextsDTO? = nil
 
     // Внимание: без ticket_url / ticket_id — см. комментарий у ChatResponseDTO.
 
@@ -202,6 +316,7 @@ struct EscalationResponseDTO: Codable, Equatable {
         case conversationId = "conversation_id"
         case sessionToken = "session_token"
         case previousConversationId = "previous_conversation_id"
+        case statusTexts = "status_texts"
     }
 }
 
@@ -338,7 +453,114 @@ struct PushOpenedRequestDTO: Codable, Equatable {
     }
 }
 
-/// Стандартный формат ошибки бэкенда: `{"error": "..."}`.
+/// Тело `POST /api/v1/widget/identify` — атрибуты `identify()` в профиль контакта
+/// сразу, без чата (тот же контракт, что у веб-виджета). Личность — по тем же
+/// правилам identity verification, что у `/chat`: `user_hash` подписывает
+/// `user_id`/`email`.
+struct IdentifyRequestDTO: Codable, Equatable {
+    var agentId: String?
+    var channelId: String?
+    var visitorId: String?
+    var email: String?
+    var userId: String?
+    var userHash: String?
+    var name: String?
+    var properties: [String: String]
+    /// Дата регистрации в продукте (`RespondoIdentity.signedUpAt`), Unix-секунды.
+    var signedUpAt: Int64?
+
+    enum CodingKeys: String, CodingKey {
+        case email, name, properties
+        case agentId = "agent_id"
+        case channelId = "channel_id"
+        case visitorId = "visitor_id"
+        case userId = "user_id"
+        case userHash = "user_hash"
+        case signedUpAt = "signed_up_at"
+    }
+}
+
+/// Ответ `POST /api/v1/widget/identify`: всегда `ok`; `created` — контакт личности
+/// создан этим вызовом (или к ней перешёл анонимный контакт устройства): SDK
+/// переотправляет identify по сокету, чтобы тот нашёл человека сразу.
+struct IdentifyResponseDTO: Decodable, Equatable {
+    var ok: Bool?
+    var created: Bool?
+}
+
+/// Тело `POST /api/v1/widget/app-session` — сессия приложения (запуск или
+/// возврат из фона): платформа, приложение и язык устройства у контакта без
+/// разрешения на пуши.
+struct AppSessionRequestDTO: Codable, Equatable {
+    var agentId: String?
+    var channelId: String?
+    var visitorId: String?
+    var email: String?
+    var userId: String?
+    var userHash: String?
+    /// Имя личности: сервер ставит его, только если отметка создаёт контакт
+    /// (слово приложения, провенанс «claimed»).
+    var name: String?
+    var platform: String
+    var appId: String?
+    var appVersion: String?
+    var sdkName: String?
+    var sdkVersion: String?
+    var locale: String?
+
+    enum CodingKeys: String, CodingKey {
+        case email, name, platform, locale
+        case agentId = "agent_id"
+        case channelId = "channel_id"
+        case visitorId = "visitor_id"
+        case userId = "user_id"
+        case userHash = "user_hash"
+        case appId = "app_id"
+        case appVersion = "app_version"
+        case sdkName = "sdk_name"
+        case sdkVersion = "sdk_version"
+    }
+}
+
+/// Тело ошибки бэкенда: `{"error", "code", "message", "details"}`.
+///
+/// Плоская форма несёт `error` строкой, вложенная (`ErrorHandler`) — объектом
+/// `{"code", "message", "details"}`; старый бэкенд — только `{"error": "..."}`.
+/// Декод терпимый: ни одна из форм его не роняет, отсутствующее поле — `nil`.
 struct BackendError: Codable, Equatable {
+    /// Текст `error`: строка — как есть, объект — его `message`, иначе `nil`.
     let error: String?
+    /// Машинный код ошибки (`BAD_REQUEST`, `NOT_FOUND`, …); `nil` у старого бэкенда.
+    let code: String?
+    /// Текст для клиента на его языке (отказ `/escalate`: «передать человеку
+    /// не вышло»), если сервер его дал.
+    let message: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case error, code, message
+    }
+
+    /// Вложенная форма поля `error`.
+    private struct NestedError: Decodable {
+        let message: String?
+    }
+
+    init(error: String?, code: String?, message: String?) {
+        self.error = error
+        self.code = code
+        self.message = message
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let text = try? container.decodeIfPresent(String.self, forKey: .error) {
+            error = text
+        } else if let nested = try? container.decodeIfPresent(NestedError.self, forKey: .error) {
+            error = nested.message
+        } else {
+            error = nil
+        }
+        code = try? container.decodeIfPresent(String.self, forKey: .code)
+        message = try? container.decodeIfPresent(String.self, forKey: .message)
+    }
 }

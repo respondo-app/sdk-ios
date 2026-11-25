@@ -1,0 +1,45 @@
+{
+  "body": {
+    "conversation_id": "00000000-0000-0000-0000-000000000000",
+    "doc_links": [
+      {
+        "title": "Connecting channels",
+        "url": "https://respondo.example.com/docs/channels"
+      }
+    ],
+    "handover_card_text": "Your conversation has been escalated to a human agent.",
+    "handover_reason": "model_marker",
+    "human_handover": true,
+    "lang": "en",
+    "message": {
+      "author_avatar_url": "https://respondo.example.com/agents/contract/avatar.png",
+      "author_name": "Contract Bot",
+      "confidence": 1,
+      "content": "I will connect you with a teammate who can check your billing.",
+      "conversation_id": "00000000-0000-0000-0000-000000000000",
+      "created_at": "1970-01-01T00:00:00Z",
+      "delivery_status": "sent",
+      "id": "00000000-0000-0000-0000-000000000000",
+      "metadata": {
+        "handover_card_text": "Your conversation has been escalated to a human agent.",
+        "handover_notice": true
+      },
+      "role": "assistant",
+      "sources": [
+        {
+          "chunk_id": "",
+          "score": 0,
+          "title": "Connecting channels",
+          "url": "https://respondo.example.com/docs/channels"
+        }
+      ],
+      "tokens_used": 30
+    },
+    "session_token": "\u003csession_token\u003e",
+    "status_texts": {
+      "back_to_ai": "Chat returned to AI assistant. How can I help you?",
+      "resolved": "Conversation closed. Thank you for reaching out!"
+    }
+  },
+  "status": 200
+}

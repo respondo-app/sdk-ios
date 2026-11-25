@@ -119,7 +119,7 @@ final class SurveyTargetingTests: XCTestCase {
         )
         let frame = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(frame["platform"] as? String, "app")
-        XCTAssertEqual(frame["features"] as? [String], ["survey_targeting"])
+        XCTAssertEqual(frame["features"] as? [String], ["survey_targeting", "app_sessions"])
     }
 
     func testOpenedSurveyResumesOnAnyScreenAfterRelaunch() async {

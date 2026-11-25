@@ -55,7 +55,7 @@ final class SseChannel: @unchecked Sendable {
                     continuation.yield(.closed)
                     continuation.finish()
                 } catch let error as TransportError {
-                    if case .backend(let status, _) = error, status == 503 {
+                    if case .backend(let status, _, _) = error, status == 503 {
                         continuation.yield(.unavailable)
                     } else {
                         continuation.yield(.closed)

@@ -357,6 +357,10 @@ actor RealtimeClient {
                 pollingCursor = dto.id
                 continuation?.yield(.newMessage(dto))
             }
+            // Тексты карточек на языке клиента — до перехода статуса.
+            if let texts = response.statusTexts {
+                continuation?.yield(.statusTexts(texts))
+            }
             if let status = response.status, status == "resolved" {
                 continuation?.yield(.statusChanged(newStatus: status))
             }

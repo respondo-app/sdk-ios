@@ -30,12 +30,6 @@ final class I18nTests: XCTestCase {
         XCTAssertFalse(strings.string("networkError", lang: "ru").isEmpty)
     }
 
-    func testDetectFromText() {
-        XCTAssertEqual(LocalizedStrings.detectFromText("Здравствуйте"), "ru")
-        XCTAssertEqual(LocalizedStrings.detectFromText("Привіт, як справи"), "uk")
-        XCTAssertNil(LocalizedStrings.detectFromText("Hello there"))
-    }
-
     func testNormalize() {
         XCTAssertEqual(LocalizedStrings.normalize("ru-RU"), "ru")
         XCTAssertEqual(LocalizedStrings.normalize("en_US"), "en")

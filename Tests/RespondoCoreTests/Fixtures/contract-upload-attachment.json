@@ -1,0 +1,42 @@
+{
+  "chat": {
+    "body": {
+      "conversation_id": "00000000-0000-0000-0000-000000000000",
+      "handover_card_text": "Your conversation has been escalated to a human agent.",
+      "human_handover": true,
+      "lang": "en",
+      "message": {
+        "attachments": [
+          {
+            "content_type": "image/png",
+            "filename": "pixel.png",
+            "id": "00000000-0000-0000-0000-000000000000",
+            "size": 70,
+            "url": "https://respondo.example.com/api/v1/chat/files/00000000-0000-0000-0000-000000000000.png"
+          }
+        ],
+        "content": "Here is a screenshot",
+        "conversation_id": "00000000-0000-0000-0000-000000000000",
+        "created_at": "1970-01-01T00:00:00Z",
+        "id": "00000000-0000-0000-0000-000000000000",
+        "role": "visitor"
+      },
+      "session_token": "\u003csession_token\u003e",
+      "status_texts": {
+        "back_to_ai": "Chat returned to AI assistant. How can I help you?",
+        "resolved": "Conversation closed. Thank you for reaching out!"
+      }
+    },
+    "status": 200
+  },
+  "upload": {
+    "body": {
+      "content_type": "image/png",
+      "filename": "pixel.png",
+      "id": "00000000-0000-0000-0000-000000000000",
+      "size": 70,
+      "url": "https://respondo.example.com/api/v1/chat/files/00000000-0000-0000-0000-000000000000.png"
+    },
+    "status": 200
+  }
+}

@@ -90,7 +90,10 @@ public struct ChatView: View {
                         QuestionChips(questions: theme.quickQuestions, theme: theme) { controller.sendSuggested($0) }
                             .padding(.top, 8)
                     }
-                    ForEach(controller.messages) { message in
+                    ForEach(Array(controller.messages.enumerated()), id: \.element.id) { index, message in
+                        if index == 0 || MessageDateFormatter.dayKey(message.createdAt) != MessageDateFormatter.dayKey(controller.messages[index - 1].createdAt) {
+                            MessageBubbleView.dateSeparator(message, strings: strings)
+                        }
                         MessageBubbleView(
                             message: message,
                             theme: theme,
@@ -100,6 +103,22 @@ public struct ChatView: View {
                             onRetry: { controller.retry(messageId: $0) }
                         )
                         .id(message.id)
+                    }
+                    // Оценка беседы (behavior.md §12) — последней строкой ленты,
+                    // только под закрытой беседой, чьё закрытие попросило оценку.
+                    if controller.ratingVisible {
+                        RatingBlockView(
+                            rating: controller.rating,
+                            theme: theme,
+                            saving: controller.ratingSaving,
+                            remarkSaving: controller.remarkSaving,
+                            label: { controller.ratingLabel($0) },
+                            onRate: { score in Task { await controller.rate(score) } },
+                            onSendRemark: { await controller.sendRemark($0) },
+                            onEditRemark: { controller.editRemark() },
+                            onCancelEdit: { controller.cancelRemarkEdit() }
+                        )
+                        .id("rating")
                     }
                     if let author = controller.typingAuthor {
                         TypingIndicatorView(author: author, strings: strings).id("typing")

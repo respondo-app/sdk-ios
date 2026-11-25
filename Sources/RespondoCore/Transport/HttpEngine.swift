@@ -37,8 +37,9 @@ enum TransportError: Error, Equatable {
     case timedOut
     case notConnected
     case cancelled
-    /// Не-2xx ответ бэкенда с распознанным телом ошибки.
-    case backend(status: Int, message: String?)
+    /// Не-2xx ответ бэкенда с распознанным телом ошибки: `message` — текст
+    /// поля `error`, `code` — машинный код (`nil`, если бэкенд его не дал).
+    case backend(status: Int, message: String?, code: String?)
     case decoding(String)
     case unknown(String)
 }
@@ -94,7 +95,7 @@ final class URLSessionHttpEngine: NSObject, HttpEngine, @unchecked Sendable {
         }
         let meta = HttpResponse(status: http.statusCode, data: Data(), headers: headers)
         if !(200...299).contains(http.statusCode) {
-            throw TransportError.backend(status: http.statusCode, message: nil)
+            throw TransportError.backend(status: http.statusCode, message: nil, code: nil)
         }
         let lines = AsyncThrowingStream<String, Error> { continuation in
             let task = Task {
